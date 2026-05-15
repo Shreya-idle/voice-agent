@@ -1,0 +1,136 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --primary-accent: #38bdf8;
+  --secondary-accent: #818cf8;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', sans-serif;
+  background: var(--bg-gradient);
+  color: #f8fafc;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+h1, h2, h3 {
+  font-family: 'Outfit', sans-serif;
+}
+
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 24px;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.glass-input {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  color: white;
+  padding: 12px 16px;
+  outline: none;
+  transition: all 0.3s ease;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.glass-input:focus {
+  border-color: var(--primary-accent);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.btn-primary {
+  background: linear-gradient(90deg, var(--primary-accent), var(--secondary-accent));
+  border: none;
+  border-radius: 12px;
+  color: white;
+  padding: 12px 24px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  opacity: 0.9;
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+/* Layout Utilities */
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.flex-1 { flex: 1; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+.justify-between { justify-content: space-between; }
+.justify-start { justify-content: flex-start; }
+.justify-end { justify-content: flex-end; }
+.gap-1 { gap: 0.25rem; }
+.gap-2 { gap: 0.5rem; }
+.gap-3 { gap: 0.75rem; }
+.gap-4 { gap: 1rem; }
+.gap-6 { gap: 1.5rem; }
+.p-3 { padding: 0.75rem; }
+.p-4 { padding: 1rem; }
+.p-6 { padding: 1.5rem; }
+.p-8 { padding: 2rem; }
+.px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
+.py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
+.m-0 { margin: 0; }
+.mb-6 { margin-bottom: 1.5rem; }
+.w-full { width: 100%; }
+.max-w-4xl { max-width: 56rem; }
+.h-8 { height: 2rem; }
+.h-10 { height: 2.5rem; }
+.w-10 { width: 2.5rem; }
+.h-screen { height: 100vh; }
+.h-\[85vh\] { height: 85vh; }
+.min-h-screen { min-height: 100vh; }
+.rounded-full { border-radius: 9999px; }
+.rounded-xl { border-radius: 0.75rem; }
+.rounded-2xl { border-radius: 1rem; }
+.bg-white\/5 { background-color: rgba(255, 255, 255, 0.05); }
+.bg-white\/10 { background-color: rgba(255, 255, 255, 0.1); }
+.border-b { border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+.border-t { border-top: 1px solid rgba(255, 255, 255, 0.1); }
+.text-xl { font-size: 1.25rem; line-height: 1.75rem; }
+.text-xs { font-size: 0.75rem; line-height: 1rem; }
+.text-sm { font-size: 0.875rem; line-height: 1.25rem; }
+.font-bold { font-weight: 700; }
+.font-medium { font-weight: 500; }
+.text-sky-400 { color: #38bdf8; }
+.text-slate-400 { color: #94a3b8; }
+.text-slate-500 { color: #64748b; }
+.italic { font-style: italic; }
+.animate-spin { animation: spin 1s linear infinite; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.animate-pulse { animation: pulse_bg 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+@keyframes pulse_bg { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+.overflow-hidden { overflow: hidden; }
+.overflow-y-auto { overflow-y: auto; }
+.scroll-smooth { scroll-behavior: smooth; }
+.flex-row-reverse { flex-direction: row-reverse; }
+.flex-shrink-0 { flex-shrink: 0; }
+.leading-relaxed { line-height: 1.625; }
+.aspect-square { aspect-ratio: 1 / 1; }
+.uppercase { text-transform: uppercase; }
+.tracking-widest { letter-spacing: 0.1em; }
+.space-y-6 > * + * { margin-top: 1.5rem; }
+.bg-gradient-to-tr { background-image: linear-gradient(to top right, var(--primary-accent), var(--secondary-accent)); }
+.bg-indigo-500 { background-color: #6366f1; }
+.bg-indigo-600\/20 { background-color: rgba(79, 70, 229, 0.2); }
+.border-indigo-500\/30 { border: 1px solid rgba(99, 102, 241, 0.3); }
+.hover\:bg-white\/10:hover { background-color: rgba(255, 255, 255, 0.1); }
+.transition-colors { transition-property: background-color, border-color, color, fill, stroke; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }

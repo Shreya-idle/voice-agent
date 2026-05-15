@@ -1,0 +1,8 @@
+langchain
+langchain-groq
+elevenlabs
+python-dotenv
+pyaudio
+faiss-cpu
+langchain-community
+langchain-openai

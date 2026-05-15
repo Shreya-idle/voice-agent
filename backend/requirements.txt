@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+langchain
+langchain-groq
+langchain-huggingface
+chromadb
+elevenlabs
+python-dotenv
+pydantic
+sentence-transformers
+langchain-experimental
+pypdf

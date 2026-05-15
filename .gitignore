@@ -1,0 +1,52 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.env
+
+# Dependencies
+node_modules/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Firebase
+serviceAccountKey.json
+serviceaccountkey.json
+
+# Local databases/storage
+chroma_db/
+qdrant_storage*/
+data/knowledge_base.txt
+
+# Build/Output
+dist/
+build/
+static/audio/*.mp3
+.coverage
+htmlcov/
+*.pdf
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Flutter / Secret Configs
+pubspec.yaml
+pubspec.lock
+ios/Runner/GeneratedPluginRegistrant.m
+android/local.properties
+*.keystore
+*.jks
+*.p12
+*.key
+*.pem
+secrets.*
+config.local.*
