@@ -26,6 +26,7 @@ dependencies = [
     "livekit-plugins-elevenlabs",
     "livekit-plugins-silero",
     "langchain-chroma>=1.1.0",
+    "firebase-admin",
 ]
 
 [dependency-groups]

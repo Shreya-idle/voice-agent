@@ -10,3 +10,4 @@ pydantic
 sentence-transformers
 langchain-experimental
 pypdf
+firebase-admin
