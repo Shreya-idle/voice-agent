@@ -13,7 +13,6 @@ import {
   useTracks,
   useLocalParticipant,
   BarVisualizer,
-  TrackReferenceOrPlaceholder,
 } from '@livekit/components-react';
 import { Track, RoomEvent } from 'livekit-client';
 
