@@ -12,7 +12,6 @@
   "dependencies": {
     "@livekit/components-react": "^2.9.21",
     "@livekit/components-styles": "^1.2.0",
-    "@rolldown/binding-win32-x64-msvc": "^1.0.1",
     "axios": "^1.16.0",
     "firebase": "^12.13.0",
     "framer-motion": "^12.38.0",
