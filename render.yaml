@@ -1,7 +1,5 @@
 services:
-  # ─────────────────────────────────────────
   # 1. FastAPI Backend
-  # ─────────────────────────────────────────
   - type: web
     name: voiceagent-backend
     runtime: python
@@ -24,10 +22,8 @@ services:
       - key: FIREBASE_SERVICE_ACCOUNT_KEY
         sync: false
 
-  # ─────────────────────────────────────────
-  # 2. LiveKit Agent (Background Worker)
-  # ─────────────────────────────────────────
-  - type: worker
+  #  2. LiveKit Agent (Background Worker)
+  - type: web
     name: voiceagent-livekit-agent
     runtime: python
     rootDir: backend
@@ -49,9 +45,7 @@ services:
       - key: FIREBASE_SERVICE_ACCOUNT_KEY
         sync: false
 
-  # ─────────────────────────────────────────
   # 3. React Frontend (Static Site)
-  # ─────────────────────────────────────────
   - type: web
     name: voiceagent-frontend
     runtime: static
