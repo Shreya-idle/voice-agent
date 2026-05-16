@@ -22,7 +22,7 @@ services:
       - key: FIREBASE_SERVICE_ACCOUNT_KEY
         sync: false
 
-  #  2. LiveKit Agent (Background Worker)
+  #  2. LiveKit Agent 
   - type: web
     name: voiceagent-livekit-agent
     runtime: python
