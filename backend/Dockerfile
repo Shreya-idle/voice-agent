@@ -16,4 +16,4 @@ RUN uv sync --frozen --no-dev
 
 COPY . .
 ENV PYTHONUNBUFFERED=1
-CMD ["sh", "-c", "if [ -z \"$PORT\" ] || [ \"$PORT\" = \"undefined\" ]; then PORT=8000; fi; uv run uvicorn main:app --host 0.0.0.0 --port $PORT"]
+CMD ["sh", "-c", "uv run uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
