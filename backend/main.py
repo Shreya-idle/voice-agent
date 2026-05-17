@@ -114,6 +114,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+os.makedirs("static/audio", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/")
@@ -122,10 +123,7 @@ async def root():
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
-    print(f"🔥 REQUEST RECEIVED - uid: {request.uid}, message: {request.message}")
-    print(f"🔥 FIREBASE_INITIALIZED: {FIREBASE_INITIALIZED}")
-    print(f"🔥 DB: {db}")
-    
+   
     if not agent_app.qa_chain:
         raise HTTPException(
             status_code=503, 
