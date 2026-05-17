@@ -20,9 +20,9 @@ serviceAccountKey.json
 serviceaccountkey.json
 
 # Local databases/storage
-chroma_db/
-qdrant_storage*/
-data/knowledge_base.txt
+# chroma_db/
+# qdrant_storage*/
+# data/knowledge_base.txt
 
 # Build/Output
 dist/

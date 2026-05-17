@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     groq_model_name: str = "llama-3.1-8b-instant"
     temperature: float = 0.7
 
-    data_path: str = "../articulo.pdf"
+    data_path: str = "./articulo.pdf"
     persist_directory: str = "./chroma_db"
 
     host: str = "0.0.0.0"

@@ -4,9 +4,9 @@ FROM node:20-alpine as builder
 WORKDIR /app
 
 # Copy package configuration
-COPY package.json package-lock.json* ./
+COPY package.json ./
 
-# Install dependencies
+# Install dependencies (ignoring local lockfile to avoid Windows/Linux platform conflicts)
 RUN npm install
 
 # Copy source code and build the application

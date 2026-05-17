@@ -16,7 +16,7 @@ import {
 } from '@livekit/components-react';
 import { Track, RoomEvent } from 'livekit-client';
 
-const API_URL = 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
 const LIVEKIT_URL = import.meta.env.VITE_LIVEKIT_URL;
 
 function App() {

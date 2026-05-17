@@ -50,6 +50,8 @@ class RAGEngine:
 
     def _ensure_data_file_exists(self) -> None:
         if not os.path.exists(self.data_path):
+            if self.data_path.lower().endswith(".pdf"):
+                raise FileNotFoundError(f"Required PDF file not found: {self.data_path}")
             os.makedirs(os.path.dirname(self.data_path), exist_ok=True)
             with open(self.data_path, "w") as f:
                 f.write("Welcome to the Voice Agent Knowledge Base.")
