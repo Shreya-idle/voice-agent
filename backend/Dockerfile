@@ -2,18 +2,21 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies (build-essential, curl, portaudio for pyaudio)
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
     portaudio19-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements file to cache dependencies
-COPY requirements.txt ./
+# Install uv package manager
+RUN pip install uv
 
-# Install project dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy project files
+COPY pyproject.toml uv.lock* ./
+
+# Sync dependencies using uv (ignoring dev dependencies)
+RUN uv sync --frozen --no-dev
 
 # Copy the rest of the application code
 COPY . .
@@ -21,6 +24,5 @@ COPY . .
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 
-# The default command runs the FastAPI backend. 
-# Railway provides a $PORT environment variable dynamically.
-CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
+# Default command starts the FastAPI app using uv
+CMD uv run uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
