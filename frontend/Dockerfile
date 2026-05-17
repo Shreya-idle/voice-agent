@@ -15,4 +15,4 @@ RUN npm install -g serve
 
 COPY --from=builder /app/dist ./dist
 
-CMD ["sh", "-c", "serve -s dist -l ${PORT:-8080}"]
+CMD ["sh", "-c", "if [ -z \"$PORT\" ] || [ \"$PORT\" = \"undefined\" ]; then PORT=3000; fi; serve -s dist -l $PORT"]
