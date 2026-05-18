@@ -45,8 +45,10 @@ function App() {
     try {
       const roomName = `room-${uid.substring(0, 8)}`;
       const response = await axios.get(`${API_URL}/token`, {
-        params: { room: roomName, identity: uid }
+        params: { room: roomName, identity: uid },
+        headers: { 'Cache-Control': 'no-cache' }
       });
+      console.log("Token received:", response.data.token);
       setLivekitToken(response.data.token);
       setIsConnected(true);
     } catch (error) {
