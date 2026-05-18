@@ -17,7 +17,7 @@ import {
 import { Track, RoomEvent } from 'livekit-client';
 
 const API_URL = import.meta.env.VITE_BACKEND_URL || 'https://voiceagent-backend-production-c3fd.up.railway.app';
-const LIVEKIT_URL = import.meta.env.VITE_LIVEKIT_URL;
+const LIVEKIT_URL = import.meta.env.VITE_LIVEKIT_URL || 'wss://voice-agent-lxdrwst6.livekit.cloud';
 
 function App() {
   const [uid, setUid] = useState(null);
