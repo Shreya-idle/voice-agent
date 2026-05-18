@@ -96,6 +96,7 @@ h1, h2, h3 {
 .h-10 { height: 2.5rem; }
 .w-10 { width: 2.5rem; }
 .h-screen { height: 100vh; }
+.h-full { height: 100%; }
 .h-\[85vh\] { height: 85vh; }
 .min-h-screen { min-height: 100vh; }
 .rounded-full { border-radius: 9999px; }
@@ -134,3 +135,25 @@ h1, h2, h3 {
 .border-indigo-500\/30 { border: 1px solid rgba(99, 102, 241, 0.3); }
 .hover\:bg-white\/10:hover { background-color: rgba(255, 255, 255, 0.1); }
 .transition-colors { transition-property: background-color, border-color, color, fill, stroke; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
+
+.overflow-y-auto {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.overflow-y-auto::-webkit-scrollbar {
+  width: 6px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 9999px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
+}

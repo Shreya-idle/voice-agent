@@ -63,7 +63,6 @@ class TestMainAPI:
     def test_chat_success(self, mock_qa_chain, mock_firestore):
         mock_qa_chain.invoke.return_value = {"result": "test answer", "source_documents": []}
         
-        # Mock user document for credits
         mock_user_doc = Mock()
         mock_user_doc.exists = True
         mock_user_doc.to_dict.return_value = {"credits": 10}
@@ -77,3 +76,24 @@ class TestMainAPI:
             assert data["response"] == "test answer"
             assert data["audio_url"] == "/static/audio/test.mp3"
             assert data["remaining_credits"] == 9
+
+    def test_get_user_credits_existing(self, mock_firestore):
+        mock_user_doc = Mock()
+        mock_user_doc.exists = True
+        mock_user_doc.to_dict.return_value = {"credits": 5}
+        mock_firestore.collection().document().get.return_value = mock_user_doc
+        
+        with patch('main.FIREBASE_INITIALIZED', True):
+            response = client.get("/user/user123/credits")
+            assert response.status_code == 200
+            assert response.json() == {"credits": 5}
+
+    def test_get_user_credits_new(self, mock_firestore):
+        mock_user_doc = Mock()
+        mock_user_doc.exists = False
+        mock_firestore.collection().document().get.return_value = mock_user_doc
+        
+        with patch('main.FIREBASE_INITIALIZED', True):
+            response = client.get("/user/user123/credits")
+            assert response.status_code == 200
+            assert response.json() == {"credits": 10}

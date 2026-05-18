@@ -70,7 +70,7 @@ class VoiceAgentApp:
 
             template = """
             You are a helpful and professional Voice Agent. Use the following pieces of context to answer the user's question. 
-            If you don't know the answer, just say that you don't know, don't try to make up an answer.
+            If the context does not contain the answer or you don't know the answer, you MUST say exactly: "I am sorry, but I don't know the answer."
             Keep your responses concise and suitable for voice synthesis.
 
             Context: {context}
@@ -121,8 +121,26 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 async def root():
     return {"message": "Voice Agent API is running", "status": "healthy"}
 
+@app.get("/user/{uid}/credits")
+async def get_user_credits(uid: str):
+    if not FIREBASE_INITIALIZED or not db:
+        return {"credits": 10}
+    try:
+        user_ref = db.collection('users').document(uid)
+        user_doc = user_ref.get()
+        if not user_doc.exists:
+            user_ref.set({"credits": 10})
+            return {"credits": 10}
+        return {"credits": user_doc.to_dict().get("credits", 10)}
+    except Exception as e:
+        logger.error(f"Failed to fetch credits: {e}")
+        return {"credits": 10}
+
+
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
+    user_ref = None
+    remaining_credits = 10
    
     if not agent_app.qa_chain:
         raise HTTPException(
@@ -130,13 +148,13 @@ async def chat(request: ChatRequest):
             detail="Voice Agent components are not initialized"
         )
     
-    remaining_credits = 10 
     if FIREBASE_INITIALIZED and db and request.uid:
         user_ref = db.collection('users').document(request.uid)
         user_doc = user_ref.get()
         
         if not user_doc.exists:
             user_ref.set({"credits": 10})
+            remaining_credits = 10
         else:
             remaining_credits = user_doc.to_dict().get("credits", 0)
             
@@ -160,7 +178,12 @@ async def chat(request: ChatRequest):
         audio_url = handle_tts(answer)
 
         if FIREBASE_INITIALIZED and db:
-            unanswered_phrases = ["don't know", "couldn't find an answer", "i'm sorry"]
+            unanswered_phrases = [
+                "don't know", "do not know", "couldn't find", "could not find",
+                "not mentioned", "not stated", "sorry", "no information",
+                "cannot answer", "unable to answer", "out of scope", "does not say",
+                "doesn't say", "not specified"
+            ]
             is_answered = not any(phrase in answer.lower() for phrase in unanswered_phrases)
             
             try:
@@ -252,7 +275,7 @@ def handle_tts(text: str) -> Optional[str]:
     try:
         audio_generator = eleven_client.text_to_speech.convert(
             text=text,
-            voice_id="EXAVITQu4vr4xnSDxMaL",  # Bella's ID (Works on Free Tier)
+            voice_id="EXAVITQu4vr4xnSDxMaL",
             model_id="eleven_multilingual_v2"
         )
         

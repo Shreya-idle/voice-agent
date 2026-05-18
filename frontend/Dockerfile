@@ -6,7 +6,7 @@ COPY package.json package-lock.json ./
 RUN npm install
 COPY . .
 
-# NEW: Accept Firebase config as build arguments
+# Accept Firebase config as build arguments
 ARG VITE_FIREBASE_API_KEY
 ARG VITE_FIREBASE_AUTH_DOMAIN
 ARG VITE_FIREBASE_PROJECT_ID
@@ -17,7 +17,6 @@ ARG VITE_FIREBASE_MEASUREMENT_ID
 ARG VITE_BACKEND_URL
 ARG VITE_LIVEKIT_URL
 
-# NEW: Pass them as environment variables during build
 ENV VITE_FIREBASE_API_KEY=$VITE_FIREBASE_API_KEY
 ENV VITE_FIREBASE_AUTH_DOMAIN=$VITE_FIREBASE_AUTH_DOMAIN
 ENV VITE_FIREBASE_PROJECT_ID=$VITE_FIREBASE_PROJECT_ID
@@ -40,5 +39,5 @@ COPY --from=builder /app/dist ./dist
 
 EXPOSE 3000
 
-# CHANGED: Use dynamic port binding
-CMD ["serve", "-s", "dist", "-l", "tcp://0.0.0.0:${PORT:-3000}"]
+# Use dynamic port binding (shell form for variable expansion)
+CMD serve -s dist -l tcp://0.0.0.0:${PORT:-3000}

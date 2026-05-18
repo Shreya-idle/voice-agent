@@ -16,7 +16,7 @@ import {
 } from '@livekit/components-react';
 import { Track, RoomEvent } from 'livekit-client';
 
-const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_BACKEND_URL || 'https://voiceagent-backend-production-c3fd.up.railway.app';
 const LIVEKIT_URL = import.meta.env.VITE_LIVEKIT_URL;
 
 function App() {
@@ -104,6 +104,7 @@ function VoiceAgentUI({ uid, onDisconnect }) {
     { role: 'assistant', content: 'Connected! I am listening. How can I help you?' }
   ]);
   const [input, setInput] = useState('');
+  const [isSending, setIsSending] = useState(false);
   const [credits, setCredits] = useState('...');
   const [analytics, setAnalytics] = useState(null);
   const scrollRef = useRef(null);
@@ -111,14 +112,13 @@ function VoiceAgentUI({ uid, onDisconnect }) {
   const room = useRoomContext();
   const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
   
-  // Track remote audio for visualizer
   const tracks = useTracks([Track.Source.Microphone]);
   const agentTrack = tracks.find(t => t.participant.identity !== uid);
 
   useEffect(() => {
     fetchAnalytics();
+    fetchCredits();
     
-    // Listen for data messages (transcripts) if the agent sends them
     const handleData = (payload, participant) => {
       const decoder = new TextDecoder();
       const text = decoder.decode(payload);
@@ -128,7 +128,6 @@ function VoiceAgentUI({ uid, onDisconnect }) {
           setMessages(prev => [...prev, { role: data.role, content: data.content }]);
         }
       } catch (e) {
-        // Fallback if not JSON
         console.log("Received raw message:", text);
       }
     };
@@ -141,9 +140,24 @@ function VoiceAgentUI({ uid, onDisconnect }) {
 
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      const timer = setTimeout(() => {
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+      }, 50);
+      return () => clearTimeout(timer);
     }
   }, [messages]);
+
+  const fetchCredits = async () => {
+    if (!uid) return;
+    try {
+      const response = await axios.get(`${API_URL}/user/${uid}/credits`);
+      setCredits(response.data.credits);
+    } catch (error) {
+      console.error("Error fetching credits:", error);
+    }
+  };
 
   const fetchAnalytics = async () => {
     try {
@@ -160,8 +174,49 @@ function VoiceAgentUI({ uid, onDisconnect }) {
     }
   };
 
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!input.trim() || isSending) return;
+
+    const userMessage = input.trim();
+    setInput('');
+    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+    setIsSending(true);
+
+    try {
+      const response = await axios.post(`${API_URL}/chat`, {
+        message: userMessage,
+        uid: uid
+      });
+
+      const { response: answer, audio_url, remaining_credits } = response.data;
+
+      setMessages(prev => [...prev, { role: 'assistant', content: answer }]);
+
+      if (remaining_credits !== undefined) {
+        setCredits(remaining_credits);
+      }
+
+      if (audio_url) {
+        const fullAudioUrl = `${API_URL.replace(/\/$/, '')}${audio_url}`;
+        const audio = new Audio(fullAudioUrl);
+        audio.play().catch(err => console.error("Error playing response audio:", err));
+      }
+
+      fetchAnalytics();
+    } catch (error) {
+      console.error("Error sending text message:", error);
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: 'Error: Failed to connect to the backend server. Please make sure the backend is running locally.' 
+      }]);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   return (
-    <>
+    <div className="flex flex-col h-full w-full overflow-hidden">
       <div className="p-6 border-b border-[rgba(255,255,255,0.1)] flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-sky-400 to-indigo-500 flex items-center justify-center">
@@ -177,6 +232,10 @@ function VoiceAgentUI({ uid, onDisconnect }) {
         </div>
         
         <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 shadow-sm">
+            <Zap size={12} className="text-indigo-400 fill-indigo-400 animate-pulse" />
+            <span className="text-xs font-semibold text-indigo-400">{credits} Credits Left</span>
+          </div>
           <div className="hidden sm:flex items-center gap-1 px-3 py-1 rounded-full bg-white/5 border border-white/10">
             <span className="text-xs font-medium text-slate-400">RAG Enabled</span>
           </div>
@@ -251,30 +310,50 @@ function VoiceAgentUI({ uid, onDisconnect }) {
             )}
           </div>
 
-          <div className="flex items-center gap-4 w-full justify-center">
-            <button 
-              onClick={toggleMic}
-              className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${
-                isMicrophoneEnabled 
-                ? 'bg-indigo-600 shadow-lg shadow-indigo-500/40' 
-                : 'bg-white/10 border border-white/10'
-              }`}
-            >
-              {isMicrophoneEnabled ? <Mic size={28} /> : <MicOff size={28} className="text-slate-400" />}
-            </button>
-            
-            <div className="flex flex-col">
-              <p className="text-sm font-medium text-white">
-                {isMicrophoneEnabled ? "Listening..." : "Microphone Muted"}
-              </p>
-              <p className="text-xs text-slate-400">
-                {isMicrophoneEnabled ? "Speak naturally to chat" : "Tap to unmute"}
-              </p>
+          <div className="flex flex-col sm:flex-row items-center gap-6 w-full justify-between max-w-3xl">
+            <div className="flex items-center gap-4 min-w-[200px]">
+              <button 
+                onClick={toggleMic}
+                className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${
+                  isMicrophoneEnabled 
+                  ? 'bg-indigo-600 shadow-lg shadow-indigo-500/40' 
+                  : 'bg-white/10 border border-white/10'
+                }`}
+              >
+                {isMicrophoneEnabled ? <Mic size={24} /> : <MicOff size={24} className="text-slate-400" />}
+              </button>
+              
+              <div className="flex flex-col">
+                <p className="text-sm font-medium text-white">
+                  {isMicrophoneEnabled ? "Listening..." : "Mic Muted"}
+                </p>
+                <p className="text-xs text-slate-400">
+                  {isMicrophoneEnabled ? "Speak to chat" : "Tap to unmute"}
+                </p>
+              </div>
             </div>
+
+            <form onSubmit={handleSendMessage} className="flex gap-2 w-full flex-1">
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={credits === 0 || credits === '0' || credits === '00' ? "Out of credits (10/10 messages used)." : "Type your message here..."}
+                disabled={isSending || credits === 0 || credits === '0' || credits === '00'}
+                className="flex-1 bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500/50 transition-all text-white placeholder-slate-500 disabled:opacity-50"
+              />
+              <button
+                type="submit"
+                disabled={isSending || !input.trim() || credits === 0 || credits === '0' || credits === '00'}
+                className="p-3 rounded-xl bg-indigo-600 text-white hover:bg-indigo-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              >
+                {isSending ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
+              </button>
+            </form>
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
