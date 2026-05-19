@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { Routes, Route, useNavigate } from 'react-router-dom';
 import { Mic, MicOff, Send, Volume2, VolumeX, Bot, User, Loader2, PhoneOff, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
@@ -22,8 +23,8 @@ const LIVEKIT_URL = import.meta.env.VITE_LIVEKIT_URL || 'wss://voice-agent-lxdrw
 function App() {
   const [uid, setUid] = useState(null);
   const [livekitToken, setLivekitToken] = useState(null);
-  const [isConnected, setIsConnected] = useState(false);
-  
+  const navigate = useNavigate();
+
   useEffect(() => {
     signInAnonymously(auth).catch(error => {
       console.error("Error signing in anonymously:", error);
@@ -50,54 +51,85 @@ function App() {
       });
       console.log("Token received:", response.data.token);
       setLivekitToken(response.data.token);
-      setIsConnected(true);
+      navigate('/conversation');
     } catch (error) {
       console.error("Error fetching LiveKit token:", error);
     }
   };
 
   const handleDisconnect = () => {
-    setIsConnected(false);
     setLivekitToken(null);
+    navigate('/');
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 sm:p-8">
-      {isConnected && livekitToken ? (
-        <LiveKitRoom
-          serverUrl={LIVEKIT_URL}
-          token={livekitToken}
-          connect={true}
-          audio={true}
-          video={false}
-          onDisconnected={handleDisconnect}
-          className="w-full max-w-4xl h-[85vh] flex flex-col glass-card overflow-hidden"
-        >
-          <VoiceAgentUI uid={uid} onDisconnect={handleDisconnect} />
-          <RoomAudioRenderer />
-        </LiveKitRoom>
-      ) : (
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="w-full max-w-md p-8 glass-card text-center"
-        >
-          <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-sky-400 to-indigo-500 flex items-center justify-center mx-auto mb-6 shadow-lg shadow-indigo-500/20">
-            <Bot size={40} color="white" />
+    <Routes>
+      <Route
+        path="/"
+        element={
+          <div className="flex flex-col items-center justify-center min-h-screen p-4 sm:p-8">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="w-full max-w-md p-8 glass-card text-center"
+            >
+              <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-sky-400 to-indigo-500 flex items-center justify-center mx-auto mb-6 shadow-lg shadow-indigo-500/20">
+                <Bot size={40} color="white" />
+              </div>
+              <h1 className="text-3xl font-bold mb-2">Voice Agent</h1>
+              <p className="text-slate-400 mb-8">Connect to start a real-time conversation with your personal AI assistant.</p>
+              <button
+                onClick={handleConnect}
+                disabled={!uid}
+                className="w-full btn-primary py-4 rounded-2xl font-bold flex items-center justify-center gap-2 group"
+              >
+                {!uid ? <Loader2 className="animate-spin" /> : <Zap size={20} className="group-hover:animate-pulse" />}
+                {uid ? "Start Conversation" : "Initializing..."}
+              </button>
+            </motion.div>
           </div>
-          <h1 className="text-3xl font-bold mb-2">Voice Agent</h1>
-          <p className="text-slate-400 mb-8">Connect to start a real-time conversation with your personal AI assistant.</p>
-          <button 
-            onClick={handleConnect}
-            disabled={!uid}
-            className="w-full btn-primary py-4 rounded-2xl font-bold flex items-center justify-center gap-2 group"
-          >
-            {!uid ? <Loader2 className="animate-spin" /> : <Zap size={20} className="group-hover:animate-pulse" />}
-            {uid ? "Start Conversation" : "Initializing..."}
-          </button>
-        </motion.div>
-      )}
-    </div>
+        }
+      />
+      <Route
+        path="/conversation"
+        element={
+          livekitToken ? (
+            <div className="flex flex-col items-center justify-center min-h-screen p-4 sm:p-8">
+              <LiveKitRoom
+                serverUrl={LIVEKIT_URL}
+                token={livekitToken}
+                connect={true}
+                audio={true}
+                video={false}
+                onDisconnected={handleDisconnect}
+                className="w-full max-w-4xl h-[85vh] flex flex-col glass-card overflow-hidden"
+              >
+                <VoiceAgentUI uid={uid} onDisconnect={handleDisconnect} />
+                <RoomAudioRenderer />
+              </LiveKitRoom>
+            </div>
+          ) : (
+            // Token not available (e.g. page refreshed) — redirect back to landing
+            <div className="flex flex-col items-center justify-center min-h-screen p-4 sm:p-8">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="w-full max-w-md p-8 glass-card text-center"
+              >
+                <p className="text-slate-400 mb-6">Session expired or not found. Please start a new conversation.</p>
+                <button
+                  onClick={() => navigate('/')}
+                  className="w-full btn-primary py-4 rounded-2xl font-bold flex items-center justify-center gap-2"
+                >
+                  <Zap size={20} />
+                  Go Back
+                </button>
+              </motion.div>
+            </div>
+          )
+        }
+      />
+    </Routes>
   );
 }
 
