@@ -1,8 +1,8 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(..., max_length=500)
     uid: Optional[str] = None
 
 class ChatResponse(BaseModel):

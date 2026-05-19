@@ -3,13 +3,18 @@ from fastapi.testclient import TestClient
 from unittest.mock import Mock, patch, MagicMock
 import os
 
-# Set environment variables for testing
 os.environ["GROQ_API_KEY"] = "test_key"
 os.environ["ELEVENLABS_API_KEY"] = "test_key"
 
-from main import app, handle_tts
+from main import app, handle_tts, verify_firebase_token
 
 client = TestClient(app)
+
+@pytest.fixture(autouse=True)
+def mock_auth_dependency():
+    app.dependency_overrides[verify_firebase_token] = lambda: "user123"
+    yield
+    app.dependency_overrides.clear()
 
 @pytest.fixture
 def mock_elevenlabs():

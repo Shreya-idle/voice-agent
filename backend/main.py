@@ -7,11 +7,17 @@ from typing import Optional
 import uuid
 
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials, firestore, auth
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Depends, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from elevenlabs.client import ElevenLabs
 from langchain_groq import ChatGroq
 from langchain_classic.chains.retrieval_qa.base import RetrievalQA
@@ -36,16 +42,16 @@ KEY_PATH = os.path.join(BASE_DIR, "serviceAccountKey.json")
 try:
     if not firebase_admin._apps:
         if os.path.exists(KEY_PATH):
-            print(f"✅ Found serviceAccountKey at: {KEY_PATH}")
+            print(f"Found serviceAccountKey at: {KEY_PATH}")
             cred = credentials.Certificate(KEY_PATH)
             firebase_admin.initialize_app(cred)
         elif os.environ.get("FIREBASE_SERVICE_ACCOUNT"):
-            print("✅ Found FIREBASE_SERVICE_ACCOUNT in environment")
+            print("Found FIREBASE_SERVICE_ACCOUNT in environment")
             service_account_info = json.loads(os.environ.get("FIREBASE_SERVICE_ACCOUNT"))
             cred = credentials.Certificate(service_account_info)
             firebase_admin.initialize_app(cred)
         else:
-            print(f"❌ NOT found at: {KEY_PATH} and FIREBASE_SERVICE_ACCOUNT not set")
+            print(f"NOT found at: {KEY_PATH} and FIREBASE_SERVICE_ACCOUNT not set")
             firebase_admin.initialize_app()
     db = firestore.client()
     FIREBASE_INITIALIZED = True
@@ -112,6 +118,11 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -124,11 +135,31 @@ os.makedirs("static/audio", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/")
-async def root():
+@limiter.limit("20/minute")
+async def root(request: Request):
     return {"message": "Voice Agent API is running", "status": "healthy"}
 
+security = HTTPBearer()
+
+def verify_firebase_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    if not FIREBASE_INITIALIZED:
+        return "unauthenticated_uid" 
+    try:
+        decoded_token = auth.verify_id_token(credentials.credentials)
+        return decoded_token['uid']
+    except Exception as e:
+        logger.error(f"Auth error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
 @app.get("/user/{uid}/credits")
-async def get_user_credits(uid: str):
+@limiter.limit("10/minute")
+async def get_user_credits(uid: str, request: Request, auth_uid: str = Depends(verify_firebase_token)):
+    if auth_uid != uid and FIREBASE_INITIALIZED:
+        raise HTTPException(status_code=403, detail="Not authorized to access these credits")
     if not FIREBASE_INITIALIZED or not db:
         return {"credits": 10}
     try:
@@ -144,9 +175,12 @@ async def get_user_credits(uid: str):
 
 
 @app.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
+@limiter.limit("10/minute")
+async def chat(request: Request, chat_request: ChatRequest, auth_uid: str = Depends(verify_firebase_token)):
     user_ref = None
     remaining_credits = 10
+   
+    effective_uid = auth_uid if FIREBASE_INITIALIZED else chat_request.uid
    
     if not agent_app.qa_chain:
         raise HTTPException(
@@ -154,8 +188,8 @@ async def chat(request: ChatRequest):
             detail="Voice Agent components are not initialized"
         )
     
-    if FIREBASE_INITIALIZED and db and request.uid:
-        user_ref = db.collection('users').document(request.uid)
+    if FIREBASE_INITIALIZED and db and effective_uid:
+        user_ref = db.collection('users').document(effective_uid)
         user_doc = user_ref.get()
         
         if not user_doc.exists:
@@ -172,9 +206,9 @@ async def chat(request: ChatRequest):
             )
 
     try:
-        logger.info(f"Processing query: {request.message}")
+        logger.info(f"Processing query: {chat_request.message}")
         
-        result = agent_app.qa_chain.invoke({"query": request.message})
+        result = agent_app.qa_chain.invoke({"query": chat_request.message})
         answer = result.get("result", "I'm sorry, I couldn't find an answer to that.")
         source_docs = result.get("source_documents", [])
         print(f"Sources used: {len(source_docs)}")
@@ -194,22 +228,22 @@ async def chat(request: ChatRequest):
             
             try:
                 transcript_data = {
-                    "uid": request.uid,
-                    "question": request.message,
+                    "uid": effective_uid,
+                    "question": chat_request.message,
                     "answer": answer,
                     "is_answered": is_answered,
                     "timestamp": firestore.SERVER_TIMESTAMP,
                     "metadata": {
                         "model": settings.groq_model_name,
-                        "remaining_credits": remaining_credits - 1 if request.uid else remaining_credits
+                        "remaining_credits": remaining_credits - 1 if effective_uid else remaining_credits
                     }
                 }
                 db.collection('transcripts').add(transcript_data)
-                logger.info(f"Transcript saved for user: {request.uid}")
+                logger.info(f"Transcript saved for user: {effective_uid}")
             except Exception as e:
                 logger.error(f"Failed to save transcript: {e}")
 
-        if FIREBASE_INITIALIZED and db and request.uid:
+        if FIREBASE_INITIALIZED and db and effective_uid:
             remaining_credits -= 1
             user_ref.update({"credits": remaining_credits})
 
@@ -223,7 +257,8 @@ async def chat(request: ChatRequest):
         )
 
 @app.get("/analytics")
-async def get_analytics():
+@limiter.limit("10/minute")
+async def get_analytics(request: Request, auth_uid: str = Depends(verify_firebase_token)):
     if not FIREBASE_INITIALIZED or not db:
         raise HTTPException(status_code=503, detail="Analytics unavailable (Firebase not initialized)")
     
@@ -252,7 +287,13 @@ async def get_analytics():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/token")
-async def get_token(room: str, identity: str):
+@limiter.limit("5/minute")
+async def get_token(room: str, identity: str, request: Request, auth_uid: str = Depends(verify_firebase_token)):
+    if auth_uid != identity and FIREBASE_INITIALIZED:
+        raise HTTPException(
+            status_code=403,
+            detail="Not authorized to request token for this identity"
+        )
     if not settings.livekit_api_key or not settings.livekit_api_secret:
         raise HTTPException(
             status_code=500,

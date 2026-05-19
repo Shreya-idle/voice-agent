@@ -1,362 +1,322 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { Mic, MicOff, Send, Volume2, VolumeX, Bot, User, Loader2, PhoneOff, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { auth } from './firebase';
-
-// LiveKit imports
 import {
   LiveKitRoom,
   RoomAudioRenderer,
   useRoomContext,
   useTracks,
   useLocalParticipant,
-  BarVisualizer,
 } from '@livekit/components-react';
 import { Track, RoomEvent } from 'livekit-client';
 
-const API_URL = import.meta.env.VITE_BACKEND_URL || 'https://voiceagent-backend-production-c3fd.up.railway.app';
-const LIVEKIT_URL = import.meta.env.VITE_LIVEKIT_URL || 'wss://voice-agent-lxdrwst6.livekit.cloud';
+const API_URL      = import.meta.env.VITE_BACKEND_URL  || 'https://voiceagent-backend-production-c3fd.up.railway.app';
+const LIVEKIT_URL  = import.meta.env.VITE_LIVEKIT_URL  || 'wss://voice-agent-lxdrwst6.livekit.cloud';
 
-function App() {
-  const [uid, setUid] = useState(null);
-  const [livekitToken, setLivekitToken] = useState(null);
-  const [isConnected, setIsConnected] = useState(false);
-  
+const IconBot = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="11" width="18" height="10" rx="2"/><path d="M12 11V5"/><circle cx="12" cy="4" r="1"/>
+    <path d="M8 15h.01M16 15h.01"/>
+  </svg>
+);
+const IconUser = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+  </svg>
+);
+const IconMic = ({ off }) => off
+  ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="2" y1="2" x2="22" y2="22"/><path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2"/><path d="M5 10v2a7 7 0 0 0 12 4.93"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><rect x="9" y="2" width="6" height="10" rx="3"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+  : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>;
+const IconSend = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+  </svg>
+);
+const IconZap = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+  </svg>
+);
+const IconLoader = () => (
+  <svg className="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+  </svg>
+);
+const IconPhone = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.42 19.42 0 0 1 4.43 9.68 19.79 19.79 0 0 1 1.36 1a2 2 0 0 1 2-2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11z"/>
+    <line x1="1" y1="1" x2="23" y2="23"/>
+  </svg>
+);
+
+function WaveSticks({ count = 9, active, side }) {
+  const [heights, setHeights] = useState(() => Array(count).fill(4));
   useEffect(() => {
-    signInAnonymously(auth).catch(error => {
-      console.error("Error signing in anonymously:", error);
-    });
+    if (!active) { setHeights(Array(count).fill(4)); return; }
+    const id = setInterval(() => {
+      setHeights(prev => prev.map(() => Math.floor(Math.random() * 20) + 3));
+    }, 120);
+    return () => clearInterval(id);
+  }, [active, count]);
 
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setUid(user.uid);
-      } else {
-        setUid(null);
-      }
-    });
+  const ordered = side === 'right' ? [...heights].reverse() : heights;
+  return (
+    <div className="waveform">
+      {ordered.map((h, i) => (
+        <div key={i} className={`wave-stick ${active ? 'active' : ''}`} style={{ height: h }} />
+      ))}
+    </div>
+  );
+}
 
-    return () => unsubscribe();
+function nowTime() {
+  return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+export default function App() {
+  const [uid, setUid]               = useState(null);
+  const [livekitToken, setToken]    = useState(null);
+  const [isConnected, setConnected] = useState(false);
+
+  useEffect(() => {
+    signInAnonymously(auth).catch(console.error);
+    const unsub = onAuthStateChanged(auth, u => setUid(u?.uid ?? null));
+    return unsub;
   }, []);
 
   const handleConnect = async () => {
     if (!uid) return;
     try {
-      const roomName = `room-${uid.substring(0, 8)}`;
-      const response = await axios.get(`${API_URL}/token`, {
-        params: { room: roomName, identity: uid },
-        headers: { 'Cache-Control': 'no-cache' }
+      const room = `room-${uid.substring(0, 8)}`;
+      const token = await auth.currentUser?.getIdToken();
+      const { data } = await axios.get(`${API_URL}/token`, {
+        params: { room, identity: uid },
+        headers: { 
+          'Cache-Control': 'no-cache',
+          'Authorization': `Bearer ${token}`
+        },
       });
-      console.log("Token received:", response.data.token);
-      setLivekitToken(response.data.token);
-      setIsConnected(true);
-    } catch (error) {
-      console.error("Error fetching LiveKit token:", error);
-    }
+      setToken(data.token);
+      setConnected(true);
+    } catch (e) { console.error('Token error:', e); }
   };
 
-  const handleDisconnect = () => {
-    setIsConnected(false);
-    setLivekitToken(null);
-  };
+  const handleDisconnect = () => { setConnected(false); setToken(null); };
+
+  if (isConnected && livekitToken) {
+    return (
+      <LiveKitRoom
+        serverUrl={LIVEKIT_URL}
+        token={livekitToken}
+        connect={true}
+        audio={true}
+        video={false}
+        onDisconnected={handleDisconnect}
+        style={{ width: '100vw', height: '100vh', display: 'contents' }}
+      >
+        <ChatShell uid={uid} onDisconnect={handleDisconnect} />
+        <RoomAudioRenderer />
+      </LiveKitRoom>
+    );
+  }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 sm:p-8">
-      {isConnected && livekitToken ? (
-        <LiveKitRoom
-          serverUrl={LIVEKIT_URL}
-          token={livekitToken}
-          connect={true}
-          audio={true}
-          video={false}
-          onDisconnected={handleDisconnect}
-          className="w-full max-w-4xl h-[85vh] flex flex-col glass-card overflow-hidden"
-        >
-          <VoiceAgentUI uid={uid} onDisconnect={handleDisconnect} />
-          <RoomAudioRenderer />
-        </LiveKitRoom>
-      ) : (
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="w-full max-w-md p-8 glass-card text-center"
-        >
-          <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-sky-400 to-indigo-500 flex items-center justify-center mx-auto mb-6 shadow-lg shadow-indigo-500/20">
-            <Bot size={40} color="white" />
-          </div>
-          <h1 className="text-3xl font-bold mb-2">Voice Agent</h1>
-          <p className="text-slate-400 mb-8">Connect to start a real-time conversation with your personal AI assistant.</p>
-          <button 
-            onClick={handleConnect}
-            disabled={!uid}
-            className="w-full btn-primary py-4 rounded-2xl font-bold flex items-center justify-center gap-2 group"
-          >
-            {!uid ? <Loader2 className="animate-spin" /> : <Zap size={20} className="group-hover:animate-pulse" />}
-            {uid ? "Start Conversation" : "Initializing..."}
-          </button>
-        </motion.div>
-      )}
+    <div className="connect-wrap">
+      <div className="connect-avatar">
+        <IconBot />
+      </div>
+      <div>
+        <div className="connect-title">Voice Agent</div>
+      </div>
+      <div className="connect-sub">
+        Connect to start a real-time conversation with your personal AI assistant.
+      </div>
+      <button className="btn-connect" onClick={handleConnect} disabled={!uid}>
+        {!uid ? <IconLoader /> : <IconZap />}
+        {uid ? 'Start Conversation' : 'Initializing...'}
+      </button>
     </div>
   );
 }
 
-function VoiceAgentUI({ uid, onDisconnect }) {
-  const [messages, setMessages] = useState([
-    { role: 'assistant', content: 'Connected! I am listening. How can I help you?' }
+function ChatShell({ uid, onDisconnect }) {
+  const [messages, setMessages]   = useState([
+    { role: 'agent', content: 'Connected! I am listening. How can I help you?', time: nowTime() },
   ]);
-  const [input, setInput] = useState('');
-  const [isSending, setIsSending] = useState(false);
-  const [credits, setCredits] = useState('...');
+  const [input, setInput]         = useState('');
+  const [sending, setSending]     = useState(false);
+  const [credits, setCredits]     = useState('...');
   const [analytics, setAnalytics] = useState(null);
-  const scrollRef = useRef(null);
-  
-  const room = useRoomContext();
+  const scrollRef                 = useRef(null);
+
+  const room                                    = useRoomContext();
   const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
-  
-  const tracks = useTracks([Track.Source.Microphone]);
-  const agentTrack = tracks.find(t => t.participant.identity !== uid);
+  const tracks  = useTracks([Track.Source.Microphone]);
+  const agentOn = tracks.some(t => t.participant.identity !== uid);
 
   useEffect(() => {
-    fetchAnalytics();
-    fetchCredits();
-    
-    const handleData = (payload, participant) => {
-      const decoder = new TextDecoder();
-      const text = decoder.decode(payload);
-      try {
-        const data = JSON.parse(text);
-        if (data.type === 'transcript') {
-          setMessages(prev => [...prev, { role: data.role, content: data.content }]);
-        }
-      } catch (e) {
-        console.log("Received raw message:", text);
-      }
-    };
-
-    room.on(RoomEvent.DataReceived, handleData);
-    return () => {
-      room.off(RoomEvent.DataReceived, handleData);
-    };
-  }, [room]);
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      const timer = setTimeout(() => {
-        if (scrollRef.current) {
-          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-        }
-      }, 50);
-      return () => clearTimeout(timer);
-    }
+    const el = scrollRef.current;
+    if (el) setTimeout(() => { el.scrollTop = el.scrollHeight; }, 40);
   }, [messages]);
+
+  useEffect(() => {
+    fetchCredits();
+    fetchAnalytics();
+    const onData = (payload) => {
+      try {
+        const data = JSON.parse(new TextDecoder().decode(payload));
+        if (data.type === 'transcript')
+          setMessages(p => [...p, { role: data.role, content: data.content, time: nowTime() }]);
+      } catch {}
+    };
+    room.on(RoomEvent.DataReceived, onData);
+    return () => room.off(RoomEvent.DataReceived, onData);
+  }, [room]);
 
   const fetchCredits = async () => {
     if (!uid) return;
-    try {
-      const response = await axios.get(`${API_URL}/user/${uid}/credits`);
-      setCredits(response.data.credits);
-    } catch (error) {
-      console.error("Error fetching credits:", error);
+    try { 
+      const token = await auth.currentUser?.getIdToken();
+      const { data } = await axios.get(`${API_URL}/user/${uid}/credits`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      }); 
+      setCredits(data.credits); 
     }
+    catch {}
   };
-
   const fetchAnalytics = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/analytics`);
-      setAnalytics(response.data);
-    } catch (error) {
-      console.error("Error fetching analytics:", error);
+    try { 
+      const token = await auth.currentUser?.getIdToken();
+      const { data } = await axios.get(`${API_URL}/analytics`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      }); 
+      setAnalytics(data); 
     }
+    catch {}
   };
 
   const toggleMic = async () => {
-    if (localParticipant) {
-      await localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled);
-    }
+    if (localParticipant) await localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled);
   };
 
-  const handleSendMessage = async (e) => {
+  const handleSend = async (e) => {
     e.preventDefault();
-    if (!input.trim() || isSending) return;
-
-    const userMessage = input.trim();
+    if (!input.trim() || sending) return;
+    const msg = input.trim();
     setInput('');
-    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
-    setIsSending(true);
-
+    setMessages(p => [...p, { role: 'user', content: msg, time: nowTime() }]);
+    setSending(true);
     try {
-      const response = await axios.post(`${API_URL}/chat`, {
-        message: userMessage,
-        uid: uid
-      });
-
-      const { response: answer, audio_url, remaining_credits } = response.data;
-
-      setMessages(prev => [...prev, { role: 'assistant', content: answer }]);
-
-      if (remaining_credits !== undefined) {
-        setCredits(remaining_credits);
-      }
-
+      const token = await auth.currentUser?.getIdToken();
+      const { data } = await axios.post(`${API_URL}/chat`, 
+        { message: msg, uid },
+        { headers: { 'Authorization': `Bearer ${token}` } }
+      );
+      const { response: answer, audio_url, remaining_credits } = data;
+      setMessages(p => [...p, { role: 'agent', content: answer, time: nowTime() }]);
+      if (remaining_credits !== undefined) setCredits(remaining_credits);
       if (audio_url) {
-        const fullAudioUrl = `${API_URL.replace(/\/$/, '')}${audio_url}`;
-        const audio = new Audio(fullAudioUrl);
-        audio.play().catch(err => console.error("Error playing response audio:", err));
+        const a = new Audio(`${API_URL.replace(/\/$/, '')}${audio_url}`);
+        a.play().catch(console.error);
       }
-
       fetchAnalytics();
-    } catch (error) {
-      console.error("Error sending text message:", error);
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: 'Error: Failed to connect to the backend server. Please make sure the backend is running locally.' 
-      }]);
-    } finally {
-      setIsSending(false);
-    }
+    } catch {
+      setMessages(p => [...p, { role: 'agent', content: 'Error connecting to backend.', time: nowTime() }]);
+    } finally { setSending(false); }
   };
+
+  const outOfCredits = credits === 0 || credits === '0';
 
   return (
-    <div className="flex flex-col h-full w-full overflow-hidden">
-      <div className="p-6 border-b border-[rgba(255,255,255,0.1)] flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-sky-400 to-indigo-500 flex items-center justify-center">
-            <Bot size={24} color="white" />
-          </div>
+    <div className="shell">
+      <header className="header">
+        <div className="header-left">
+          <div className="avatar"><IconBot /></div>
           <div>
-            <h2 className="text-xl font-bold">Voice Agent</h2>
-            <p className="text-xs text-emerald-400 flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              Real-time | {room.state}
-            </p>
+            <div className="header-title">Voice Agent</div>
+            <div className="header-status">
+              <span className="dot" />
+              Real-time . {room.state}
+            </div>
           </div>
         </div>
-        
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 shadow-sm">
-            <Zap size={12} className="text-indigo-400 fill-indigo-400 animate-pulse" />
-            <span className="text-xs font-semibold text-indigo-400">{credits} Credits Left</span>
-          </div>
-          <div className="hidden sm:flex items-center gap-1 px-3 py-1 rounded-full bg-white/5 border border-white/10">
-            <span className="text-xs font-medium text-slate-400">RAG Enabled</span>
-          </div>
-          <button 
-            onClick={onDisconnect}
-            className="p-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-all"
-          >
-            <PhoneOff size={18} />
+        <div className="header-right">
+          <div className="pill"><IconZap /> {credits} credits</div>
+          <div className="pill">RAG on</div>
+          <button className="btn-disconnect" onClick={onDisconnect}>
+            <IconPhone /> End
           </button>
         </div>
-      </div>
+      </header>
 
       {analytics && (
-        <div className="bg-white/5 border-b border-white/10 px-6 py-2 flex items-center justify-around">
-          <div className="text-center">
-            <p className="text-[10px] text-slate-400 uppercase">Total Questions</p>
-            <p className="text-sm font-bold text-white">{analytics.total_questions}</p>
+        <div className="stats">
+          <div className="stat-cell">
+            <div className="stat-label">Questions</div>
+            <div className="stat-value">{analytics.total_questions}</div>
           </div>
-          <div className="w-[1px] h-6 bg-white/10"></div>
-          <div className="text-center">
-            <p className="text-[10px] text-slate-400 uppercase">Answered</p>
-            <p className="text-sm font-bold text-emerald-400">{analytics.answered}</p>
+          <div className="stat-cell">
+            <div className="stat-label">Answered</div>
+            <div className="stat-value">{analytics.answered}</div>
           </div>
-          <div className="w-[1px] h-6 bg-white/10"></div>
-          <div className="text-center">
-            <p className="text-[10px] text-slate-400 uppercase">Success Rate</p>
-            <p className="text-sm font-bold text-sky-400">{Math.round(analytics.success_rate)}%</p>
+          <div className="stat-cell">
+            <div className="stat-label">Success</div>
+            <div className="stat-value stat-green">{Math.round(analytics.success_rate)}%</div>
           </div>
         </div>
       )}
 
-      <div 
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth"
-      >
-        {messages.map((msg, idx) => (
-          <motion.div
-            key={idx}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div className={`flex gap-3 max-w-[80%] ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${msg.role === 'user' ? 'bg-indigo-500' : 'bg-white/10'}`}>
-                {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
+      <div className="messages" ref={scrollRef}>
+        <div className="date-sep">Today</div>
+        <AnimatePresence initial={false}>
+          {messages.map((m, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.18 }}
+              className={`msg-row ${m.role === 'user' ? 'user' : 'agent'}`}
+            >
+              <div className="msg-inner">
+                <div className="msg-avatar">
+                  {m.role === 'user' ? <IconUser /> : <IconBot />}
+                </div>
+                <div className="msg-body">
+                  <div className={`bubble ${m.role === 'user' ? 'user' : 'agent'}`}>
+                    {m.content}
+                  </div>
+                  <div className="msg-time">{m.time}</div>
+                </div>
               </div>
-              <div className={`p-4 rounded-2xl ${msg.role === 'user' ? 'bg-indigo-600/20 border border-indigo-500/30' : 'bg-white/5 border border-white/10'}`}>
-                <p className="text-sm leading-relaxed">{msg.content}</p>
-              </div>
-            </div>
-          </motion.div>
-        ))}
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
 
-      <div className="p-6 bg-white/5 border-t border-white/10">
-        <div className="flex flex-col items-center gap-6">
-          {/* Visualizer for Agent's Voice */}
-          <div className="w-full h-16 flex items-center justify-center">
-            {agentTrack ? (
-              <BarVisualizer 
-                trackRef={agentTrack}
-                barCount={20}
-                gap={4}
-                className="h-full w-full max-w-sm fill-sky-400"
-              />
-            ) : (
-              <div className="flex gap-1">
-                {Array.from({ length: 15 }).map((_, i) => (
-                  <div key={i} className="w-1 h-2 bg-white/10 rounded-full" />
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center gap-6 w-full justify-between max-w-3xl">
-            <div className="flex items-center gap-4 min-w-[200px]">
-              <button 
-                onClick={toggleMic}
-                className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${
-                  isMicrophoneEnabled 
-                  ? 'bg-indigo-600 shadow-lg shadow-indigo-500/40' 
-                  : 'bg-white/10 border border-white/10'
-                }`}
-              >
-                {isMicrophoneEnabled ? <Mic size={24} /> : <MicOff size={24} className="text-slate-400" />}
-              </button>
-              
-              <div className="flex flex-col">
-                <p className="text-sm font-medium text-white">
-                  {isMicrophoneEnabled ? "Listening..." : "Mic Muted"}
-                </p>
-                <p className="text-xs text-slate-400">
-                  {isMicrophoneEnabled ? "Speak to chat" : "Tap to unmute"}
-                </p>
-              </div>
-            </div>
-
-            <form onSubmit={handleSendMessage} className="flex gap-2 w-full flex-1">
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder={credits === 0 || credits === '0' || credits === '00' ? "Out of credits (10/10 messages used)." : "Type your message here..."}
-                disabled={isSending || credits === 0 || credits === '0' || credits === '00'}
-                className="flex-1 bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500/50 transition-all text-white placeholder-slate-500 disabled:opacity-50"
-              />
-              <button
-                type="submit"
-                disabled={isSending || !input.trim() || credits === 0 || credits === '0' || credits === '00'}
-                className="p-3 rounded-xl bg-indigo-600 text-white hover:bg-indigo-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-              >
-                {isSending ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
-              </button>
-            </form>
-          </div>
-        </div>
+      <div className="viz-bar">
+        <WaveSticks count={9} active={isMicrophoneEnabled} side="left" />
+        <button className={`viz-btn ${isMicrophoneEnabled ? 'mic-on' : ''}`} onClick={toggleMic}>
+          <IconMic off={!isMicrophoneEnabled} />
+        </button>
+        <WaveSticks count={9} active={agentOn} side="right" />
       </div>
+
+      <form className="input-row" onSubmit={handleSend}>
+        <input
+          className="chat-input"
+          type="text"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          placeholder={outOfCredits ? 'Out of credits (10/10 used).' : 'Type a message or speak...'}
+          disabled={sending || outOfCredits}
+        />
+        <button className="send-btn" type="submit" disabled={sending || !input.trim() || outOfCredits}>
+          {sending ? <IconLoader /> : <IconSend />}
+        </button>
+      </form>
     </div>
   );
 }
 
-export default App;

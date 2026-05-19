@@ -24,16 +24,16 @@ KEY_PATH = os.path.join(BASE_DIR, "serviceAccountKey.json")
 try:
     if not firebase_admin._apps:
         if os.path.exists(KEY_PATH):
-            logger.info(f"✅ Found serviceAccountKey at: {KEY_PATH}")
+            logger.info(f"Found serviceAccountKey at: {KEY_PATH}")
             cred = credentials.Certificate(KEY_PATH)
             firebase_admin.initialize_app(cred)
         elif os.environ.get("FIREBASE_SERVICE_ACCOUNT"):
-            logger.info("✅ Found FIREBASE_SERVICE_ACCOUNT in environment")
+            logger.info("Found FIREBASE_SERVICE_ACCOUNT in environment")
             service_account_info = json.loads(os.environ.get("FIREBASE_SERVICE_ACCOUNT"))
             cred = credentials.Certificate(service_account_info)
             firebase_admin.initialize_app(cred)
         else:
-            logger.info(f"❌ NOT found serviceAccountKey at: {KEY_PATH} and FIREBASE_SERVICE_ACCOUNT not set")
+            logger.info(f"NOT found serviceAccountKey at: {KEY_PATH} and FIREBASE_SERVICE_ACCOUNT not set")
             firebase_admin.initialize_app()
     db = firestore.client()
     FIREBASE_INITIALIZED = True
@@ -89,7 +89,7 @@ class Assistant(Agent):
         super().__init__(
             instructions=f"""You are a professional and helpful voice assistant.
 Your goal is to answer questions about the person described below based on their resume.
-Keep your responses concise and natural for a voice conversation — under 30 words when possible.
+Keep your responses concise and natural for a voice conversation - under 30 words when possible.
 Use casual, spoken language. Never use bullet points, markdown, or special formatting.
 If the resume information does not contain the answer or you don't know it, you MUST say exactly: "I am sorry, but I don't know the answer to that based on Amit's resume."
 Do NOT make up or infer answers.
