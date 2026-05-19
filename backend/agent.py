@@ -9,8 +9,8 @@ from firebase_admin import credentials, firestore
 from livekit import agents
 from livekit.agents import AgentServer, AgentSession, Agent
 from livekit.plugins import deepgram, openai, silero
-
-from config import settings
+from livekit.plugins import elevenlabs
+from config import settings 
 from rag_engine import RAGEngine
 
 load_dotenv()
