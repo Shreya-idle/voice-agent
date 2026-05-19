@@ -1,5 +1,6 @@
 import logging
 import os
+import json
 from datetime import datetime
 from contextlib import asynccontextmanager
 from typing import Optional
@@ -38,8 +39,13 @@ try:
             print(f"✅ Found serviceAccountKey at: {KEY_PATH}")
             cred = credentials.Certificate(KEY_PATH)
             firebase_admin.initialize_app(cred)
+        elif os.environ.get("FIREBASE_SERVICE_ACCOUNT"):
+            print("✅ Found FIREBASE_SERVICE_ACCOUNT in environment")
+            service_account_info = json.loads(os.environ.get("FIREBASE_SERVICE_ACCOUNT"))
+            cred = credentials.Certificate(service_account_info)
+            firebase_admin.initialize_app(cred)
         else:
-            print(f"❌ NOT found at: {KEY_PATH}")
+            print(f"❌ NOT found at: {KEY_PATH} and FIREBASE_SERVICE_ACCOUNT not set")
             firebase_admin.initialize_app()
     db = firestore.client()
     FIREBASE_INITIALIZED = True

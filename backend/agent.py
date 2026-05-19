@@ -1,5 +1,6 @@
 import logging
 import os
+import json
 from dotenv import load_dotenv
 
 import firebase_admin
@@ -26,8 +27,13 @@ try:
             logger.info(f"✅ Found serviceAccountKey at: {KEY_PATH}")
             cred = credentials.Certificate(KEY_PATH)
             firebase_admin.initialize_app(cred)
+        elif os.environ.get("FIREBASE_SERVICE_ACCOUNT"):
+            logger.info("✅ Found FIREBASE_SERVICE_ACCOUNT in environment")
+            service_account_info = json.loads(os.environ.get("FIREBASE_SERVICE_ACCOUNT"))
+            cred = credentials.Certificate(service_account_info)
+            firebase_admin.initialize_app(cred)
         else:
-            logger.info(f"❌ NOT found serviceAccountKey at: {KEY_PATH}, trying default credentials")
+            logger.info(f"❌ NOT found serviceAccountKey at: {KEY_PATH} and FIREBASE_SERVICE_ACCOUNT not set")
             firebase_admin.initialize_app()
     db = firestore.client()
     FIREBASE_INITIALIZED = True
