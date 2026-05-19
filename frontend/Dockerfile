@@ -6,7 +6,6 @@ COPY package.json package-lock.json ./
 RUN npm install
 COPY . .
 
-# Accept Firebase config as build arguments
 ARG VITE_FIREBASE_API_KEY
 ARG VITE_FIREBASE_AUTH_DOMAIN
 ARG VITE_FIREBASE_PROJECT_ID
@@ -39,5 +38,4 @@ COPY --from=builder /app/dist ./dist
 
 EXPOSE 3000
 
-# Use dynamic port binding (shell form for variable expansion)
 CMD serve -s dist -l tcp://0.0.0.0:${PORT:-3000}

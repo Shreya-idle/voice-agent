@@ -69,9 +69,14 @@ class TestAgent:
         mock_ctx.room = Mock()
         
         registered_callbacks = {}
-        def mock_on(event_name, callback):
-            registered_callbacks[event_name] = callback
-            return callback
+        def mock_on(event_name, callback=None):
+            if callback is not None:
+                registered_callbacks[event_name] = callback
+                return callback
+            def decorator(cb):
+                registered_callbacks[event_name] = cb
+                return cb
+            return decorator
 
         mock_instance = MagicMock()
         mock_instance.on = mock_on
