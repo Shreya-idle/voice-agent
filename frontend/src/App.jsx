@@ -188,9 +188,11 @@ function ChatShell({ uid, onDisconnect }) {
   };
   const fetchAnalytics = async () => {
     try { 
+      
       const token = await auth.currentUser?.getIdToken();
       const { data } = await axios.get(`${API_URL}/analytics`, {
         headers: { 'Authorization': `Bearer ${token}` }
+
       }); 
       setAnalytics(data); 
     }

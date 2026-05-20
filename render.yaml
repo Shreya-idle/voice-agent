@@ -19,7 +19,7 @@ services:
         sync: false
       - key: LIVEKIT_API_SECRET
         sync: false
-      - key: FIREBASE_SERVICE_ACCOUNT_KEY
+      - key: FIREBASE_SERVICE_ACCOUNT
         sync: false
 
   #  2. LiveKit Agent 
@@ -42,7 +42,7 @@ services:
         sync: false
       - key: LIVEKIT_API_SECRET
         sync: false
-      - key: FIREBASE_SERVICE_ACCOUNT_KEY
+      - key: FIREBASE_SERVICE_ACCOUNT
         sync: false
 
   # 3. React Frontend (Static Site)

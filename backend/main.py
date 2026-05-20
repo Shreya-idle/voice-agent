@@ -258,7 +258,7 @@ async def chat(request: Request, chat_request: ChatRequest, auth_uid: str = Depe
 
 @app.get("/analytics")
 @limiter.limit("10/minute")
-async def get_analytics(request: Request, auth_uid: str = Depends(verify_firebase_token)):
+async def get_analytics(request: Request):
     if not FIREBASE_INITIALIZED or not db:
         raise HTTPException(status_code=503, detail="Analytics unavailable (Firebase not initialized)")
     
