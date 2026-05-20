@@ -27,6 +27,7 @@ dependencies = [
     "livekit-plugins-silero",
     "langchain-chroma>=1.1.0",
     "firebase-admin",
+    "slowapi",
 ]
 
 [dependency-groups]
