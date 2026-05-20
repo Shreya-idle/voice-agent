@@ -10,7 +10,7 @@ import {
   useTracks,
   useLocalParticipant,
 } from '@livekit/components-react';
-import { Track, RoomEvent } from 'livekit-client';
+import { Track, RoomEvent, ParticipantKind } from 'livekit-client';
 
 const API_URL      = import.meta.env.VITE_BACKEND_URL  || 'https://voiceagent-backend-production-c3fd.up.railway.app';
 const LIVEKIT_URL  = import.meta.env.VITE_LIVEKIT_URL  || 'wss://voice-agent-lxdrwst6.livekit.cloud';
@@ -114,6 +114,7 @@ export default function App() {
         audio={true}
         video={false}
         onDisconnected={handleDisconnect}
+        onError={(err) => console.error('[LiveKit] room error:', err)}
         style={{ width: '100vw', height: '100vh', display: 'contents' }}
       >
         <ChatShell uid={uid} onDisconnect={handleDisconnect} />
@@ -153,8 +154,22 @@ function ChatShell({ uid, onDisconnect }) {
 
   const room                                    = useRoomContext();
   const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
-  const tracks  = useTracks([Track.Source.Microphone]);
-  const agentOn = tracks.some(t => t.participant.identity !== uid);
+  // Only watch remote (agent) microphone tracks to drive the right-side waveform
+  const agentTracks = useTracks([Track.Source.Microphone], { onlySubscribed: true });
+  const agentOn     = agentTracks.some(
+    t => t.participant.kind === ParticipantKind.AGENT ||
+         t.participant.identity !== uid
+  );
+
+  // Auto-enable the microphone as soon as the local participant is ready.
+  // <LiveKitRoom audio={true}> requests permission but does not guarantee the
+  // track is published — an explicit setMicrophoneEnabled(true) is required.
+  useEffect(() => {
+    if (!localParticipant) return;
+    localParticipant.setMicrophoneEnabled(true).catch((err) => {
+      console.error('[LiveKit] failed to enable microphone:', err);
+    });
+  }, [localParticipant]);
 
   useEffect(() => {
     const el = scrollRef.current;
