@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
@@ -86,24 +86,51 @@ export default function App() {
     return unsub;
   }, []);
 
-  const handleConnect = async () => {
+  const handleDisconnect = useCallback(() => {
+    setConnected(false);
+    setToken(null);
+  }, []);
+
+  const fetchAndSetToken = useCallback(async () => {
     if (!uid) return;
     try {
       const room = `room-${uid.substring(0, 8)}`;
-      const token = await auth.currentUser?.getIdToken();
+      const fbToken = await auth.currentUser?.getIdToken(true); // Force refresh Firebase token
       const { data } = await axios.get(`${API_URL}/token`, {
         params: { room, identity: uid },
-        headers: { 
+        headers: {
           'Cache-Control': 'no-cache',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${fbToken}`
         },
       });
       setToken(data.token);
-      setConnected(true);
-    } catch (e) { console.error('Token error:', e); }
-  };
+      console.log("Token fetched/refreshed");
+    } catch (e) {
+      console.error('Token fetch error:', e);
+      handleDisconnect();
+    }
+  }, [uid, handleDisconnect]);
 
-  const handleDisconnect = () => { setConnected(false); setToken(null); };
+  useEffect(() => {
+    if (!livekitToken) return;
+
+    const decodedToken = JSON.parse(atob(livekitToken.split('.')[1]));
+    const expirationTime = decodedToken.exp * 1000;
+    const timeout = expirationTime - Date.now() - 60000; // Refresh 1 minute before expiry
+
+    if (timeout <= 0) {
+      fetchAndSetToken();
+      return;
+    }
+
+    const timer = setTimeout(fetchAndSetToken, timeout);
+    return () => clearTimeout(timer);
+  }, [livekitToken, fetchAndSetToken]);
+
+  const handleConnect = async () => {
+    await fetchAndSetToken();
+    setConnected(true);
+  };
 
   if (isConnected && livekitToken) {
     return (
@@ -321,4 +348,3 @@ function ChatShell({ uid, onDisconnect }) {
     </div>
   );
 }
-
