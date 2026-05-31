@@ -212,6 +212,48 @@ body {
   color: #a0a0ff;
 }
 .viz-btn:hover { background: var(--surface2); opacity: 0.8; }
+.viz-btn.speaker-on {
+  background: var(--accent-dim);
+  border-color: rgba(91,91,214,0.4);
+  color: #a0a0ff;
+}
+
+.volume-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+}
+.volume-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 72px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--surface2);
+  outline: none;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.volume-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: none;
+  cursor: pointer;
+}
+.volume-slider:hover { background: var(--muted); }
 
 .input-row {
   display: flex; align-items: center; gap: 10px;

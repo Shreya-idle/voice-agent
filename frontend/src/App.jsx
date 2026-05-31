@@ -9,8 +9,9 @@ import {
   useRoomContext,
   useTracks,
   useLocalParticipant,
+  useRemoteParticipants,
 } from '@livekit/components-react';
-import { Track, RoomEvent } from 'livekit-client';
+import { Track, RoomEvent, ParticipantEvent } from 'livekit-client';
 
 const API_URL      = import.meta.env.VITE_BACKEND_URL  
 const LIVEKIT_URL  = import.meta.env.VITE_LIVEKIT_URL  
@@ -50,6 +51,9 @@ const IconPhone = () => (
     <line x1="1" y1="1" x2="23" y2="23"/>
   </svg>
 );
+const IconSpeaker = ({ muted }) => muted
+  ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+  : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>;
 
 function WaveSticks({ count = 9, active, side }) {
   const [heights, setHeights] = useState(() => Array(count).fill(4));
@@ -79,6 +83,7 @@ export default function App() {
   const [uid, setUid]               = useState(null);
   const [livekitToken, setToken]    = useState(null);
   const [isConnected, setConnected] = useState(false);
+  const [volume, setVolume]         = useState(1);
 
   useEffect(() => {
     signInAnonymously(auth).catch(console.error);
@@ -143,8 +148,8 @@ export default function App() {
         onDisconnected={handleDisconnect}
         style={{ width: '100vw', height: '100vh', display: 'contents' }}
       >
-        <ChatShell uid={uid} onDisconnect={handleDisconnect} />
-        <RoomAudioRenderer />
+        <ChatShell uid={uid} onDisconnect={handleDisconnect} volume={volume} onVolumeChange={setVolume} />
+        <RoomAudioRenderer volume={volume} />
       </LiveKitRoom>
     );
   }
@@ -168,7 +173,7 @@ export default function App() {
   );
 }
 
-function ChatShell({ uid, onDisconnect }) {
+function ChatShell({ uid, onDisconnect, volume, onVolumeChange }) {
   const [messages, setMessages]   = useState([
     { role: 'agent', content: 'Connected! I am listening. How can I help you?', time: nowTime() },
   ]);
@@ -176,12 +181,20 @@ function ChatShell({ uid, onDisconnect }) {
   const [sending, setSending]     = useState(false);
   const [credits, setCredits]     = useState('...');
   const [analytics, setAnalytics] = useState(null);
+  const [agentSpeaking, setAgentSpeaking] = useState(false);
   const scrollRef                 = useRef(null);
 
   const room                                    = useRoomContext();
   const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
-  const tracks  = useTracks([Track.Source.Microphone]);
-  const agentOn = tracks.some(t => t.participant.identity !== uid);
+  const remoteParticipants = useRemoteParticipants();
+
+  // Subscribe to all remote audio tracks (agent mic + any unknown source)
+  const remoteTracks = useTracks(
+    [Track.Source.Microphone, Track.Source.Unknown],
+    { onlySubscribed: true },
+  ).filter(t => t.participant.identity !== uid);
+
+  const agentOn = remoteTracks.length > 0;
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -191,6 +204,7 @@ function ChatShell({ uid, onDisconnect }) {
   useEffect(() => {
     fetchCredits();
     fetchAnalytics();
+
     const onData = (payload) => {
       try {
         const data = JSON.parse(new TextDecoder().decode(payload));
@@ -198,9 +212,49 @@ function ChatShell({ uid, onDisconnect }) {
           setMessages(p => [...p, { role: data.role, content: data.content, time: nowTime() }]);
       } catch {}
     };
+
+    const onMediaDevicesError = (e) => {
+      console.error('[AudioOutput] Media devices error:', e);
+    };
+
+    const onTrackSubscribed = (track, publication, participant) => {
+      if (track.kind === 'audio' && participant.identity !== uid) {
+        console.log(`[AudioOutput] Subscribed to audio track from agent "${participant.identity}" (source: ${track.source})`);
+      }
+    };
+
+    const onTrackSubscriptionFailed = (trackSid, participant) => {
+      console.error(`[AudioOutput] Track subscription failed — sid: ${trackSid}, participant: ${participant.identity}`);
+    };
+
     room.on(RoomEvent.DataReceived, onData);
-    return () => room.off(RoomEvent.DataReceived, onData);
-  }, [room]);
+    room.on(RoomEvent.MediaDevicesError, onMediaDevicesError);
+    room.on(RoomEvent.TrackSubscribed, onTrackSubscribed);
+    room.on(RoomEvent.TrackSubscriptionFailed, onTrackSubscriptionFailed);
+
+    return () => {
+      room.off(RoomEvent.DataReceived, onData);
+      room.off(RoomEvent.MediaDevicesError, onMediaDevicesError);
+      room.off(RoomEvent.TrackSubscribed, onTrackSubscribed);
+      room.off(RoomEvent.TrackSubscriptionFailed, onTrackSubscriptionFailed);
+    };
+  }, [room, uid]);
+
+  // Track whether the agent is actively speaking for the right-side waveform
+  useEffect(() => {
+    if (remoteParticipants.length === 0) { setAgentSpeaking(false); return; }
+    const handlers = remoteParticipants.map(p => {
+      const onSpeaking = (speaking) => setAgentSpeaking(speaking);
+      p.on(ParticipantEvent.IsSpeakingChanged, onSpeaking);
+      return { p, onSpeaking };
+    });
+    // Reflect current speaking state immediately
+    setAgentSpeaking(remoteParticipants.some(p => p.isSpeaking));
+    return () => handlers.forEach(({ p, onSpeaking }) => p.off(ParticipantEvent.IsSpeakingChanged, onSpeaking));
+  }, [remoteParticipants]);
+
+  const isMuted = volume === 0;
+  const toggleMute = () => onVolumeChange(isMuted ? 1 : 0);
 
   const fetchCredits = async () => {
     if (!uid) return;
@@ -329,7 +383,26 @@ function ChatShell({ uid, onDisconnect }) {
         <button className={`viz-btn ${isMicrophoneEnabled ? 'mic-on' : ''}`} onClick={toggleMic}>
           <IconMic off={!isMicrophoneEnabled} />
         </button>
-        <WaveSticks count={9} active={agentOn} side="right" />
+        <WaveSticks count={9} active={agentSpeaking} side="right" />
+        <div className="volume-control">
+          <button
+            className={`viz-btn ${isMuted ? '' : 'speaker-on'}`}
+            onClick={toggleMute}
+            title={isMuted ? 'Unmute agent audio' : 'Mute agent audio'}
+          >
+            <IconSpeaker muted={isMuted} />
+          </button>
+          <input
+            type="range"
+            className="volume-slider"
+            min="0"
+            max="1"
+            step="0.05"
+            value={volume}
+            onChange={e => onVolumeChange(parseFloat(e.target.value))}
+            title={`Volume: ${Math.round(volume * 100)}%`}
+          />
+        </div>
       </div>
 
       <form className="input-row" onSubmit={handleSend}>
