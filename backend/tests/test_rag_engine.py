@@ -71,3 +71,13 @@ class TestRAGEngine:
              patch('rag_engine.RAGEngine._chunk_semantically', return_value=[Mock()]):
             engine = RAGEngine()
             mock_chroma.from_documents.assert_called()
+
+    def test_query_no_vector_store(self, mock_embeddings, mock_chroma):
+        engine = RAGEngine()
+        engine.vector_store = None
+        assert engine.query("test") == []
+
+    def test_ensure_data_file_exists_pdf_not_found(self, mock_embeddings, mock_chroma):
+        with patch('os.path.exists', return_value=False):
+            with pytest.raises(FileNotFoundError):
+                RAGEngine(data_path="missing.pdf")

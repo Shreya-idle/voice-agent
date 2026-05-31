@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     temperature: float = 0.7
 
     data_path: str = "./articulo.pdf"
-    persist_directory: str = "./chroma_db"
+    persist_directory: Optional[str] = None
 
     host: str = "0.0.0.0"
     port: int = 8000

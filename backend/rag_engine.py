@@ -14,7 +14,7 @@ class RAGEngine:
     def __init__(
         self, 
         data_path: str = "../data/knowledge_base.txt", 
-        persist_directory: str = "./chroma_db"
+        persist_directory: Optional[str] = None
     ):
         self.data_path = data_path
         self.persist_directory = persist_directory
@@ -23,17 +23,22 @@ class RAGEngine:
         self._setup_vector_store()
 
     def _setup_vector_store(self) -> None:
-        if self._has_existing_store():
+        if self.persist_directory and self._has_existing_store():
             print("Loading existing vector store...")
             self.vector_store = Chroma(
                 persist_directory=self.persist_directory,
                 embedding_function=self.embeddings
             )
         else:
-            print("Creating new vector store...")
+            if self.persist_directory:
+                print("Creating new vector store and persisting to disk...")
+            else:
+                print("Creating new in-memory vector store from source document...")
             self._build_vector_store()
 
     def _has_existing_store(self) -> bool:
+        if not self.persist_directory:
+            return False
         return os.path.exists(self.persist_directory) and any(os.scandir(self.persist_directory))
 
     def _build_vector_store(self) -> None:
@@ -42,10 +47,14 @@ class RAGEngine:
         documents = self._load_documents()
         chunks = self._chunk_semantically(documents)
         
+        chroma_kwargs = {}
+        if self.persist_directory:
+            chroma_kwargs["persist_directory"] = self.persist_directory
+
         self.vector_store = Chroma.from_documents(
             documents=chunks,
             embedding=self.embeddings,
-            persist_directory=self.persist_directory
+            **chroma_kwargs
         )
 
     def _ensure_data_file_exists(self) -> None:

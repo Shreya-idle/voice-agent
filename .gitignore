@@ -19,26 +19,18 @@ __pycache__/
 serviceAccountKey.json
 serviceaccountkey.json
 
-# Local databases/storage
-# chroma_db/
-# qdrant_storage*/
-# data/knowledge_base.txt
 
-# Build/Output
 dist/
 build/
 static/audio/*.mp3
 .coverage
 htmlcov/
-*.pdf
 
-# IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# Flutter / Secret Configs
 pubspec.yaml
 pubspec.lock
 ios/Runner/GeneratedPluginRegistrant.m

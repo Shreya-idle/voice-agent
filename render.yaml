@@ -28,7 +28,7 @@ services:
     runtime: python
     rootDir: backend
     buildCommand: pip install uv && uv sync
-    startCommand: uv run python agent.py start
+    startCommand: uv run python agent.py console
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0

@@ -104,5 +104,58 @@ class TestAgent:
             
             mock_save.assert_called_once_with("What is Amit's GPA?", "Amit has a 3.9 GPA.")
 
+    @pytest.mark.asyncio
+    async def test_voice_agent_session_content_types(self):
+        from agent import voice_agent_session
+        mock_ctx = Mock()
+        mock_ctx.room = Mock()
+        registered_callbacks = {}
+        def mock_on(event_name, callback=None):
+            if callback is not None:
+                registered_callbacks[event_name] = callback
+                return callback
+            return lambda cb: registered_callbacks.update({event_name: cb})
+
+        mock_instance = MagicMock()
+        mock_instance.on = mock_on
+        mock_instance.start = AsyncMock()
+        mock_instance.generate_reply = AsyncMock()
+        
+        with patch('agent.AgentSession', return_value=mock_instance), \
+             patch('agent.save_voice_transcript') as mock_save:
+            await voice_agent_session(mock_ctx)
+            callback = registered_callbacks["conversation_item_added"]
+
+            # Test list content
+            list_event = Mock()
+            list_event.item = Mock()
+            list_event.item.role = "user"
+            list_event.item.content = ["part1", "part2"]
+            callback(list_event)
+
+            # Test other content type (e.g. dict)
+            dict_event = Mock()
+            dict_event.item = Mock()
+            dict_event.item.role = "user"
+            dict_event.item.content = {"text": "custom"}
+            callback(dict_event)
+
+            # Test empty content (should return early)
+            empty_event = Mock()
+            empty_event.item = Mock()
+            empty_event.item.role = "user"
+            empty_event.item.content = "   "
+            callback(empty_event)
+
+    def test_save_voice_transcript_exception(self):
+        from agent import save_voice_transcript
+        mock_db = MagicMock()
+        mock_db.collection.side_effect = Exception("Firebase error")
+        with patch('agent.FIREBASE_INITIALIZED', True), \
+             patch('agent.db', mock_db), \
+             patch('agent.logger.error') as mock_log_err:
+            save_voice_transcript("Q", "A")
+            mock_log_err.assert_called_once()
+
 if __name__ == "__main__":
     pytest.main()
