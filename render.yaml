@@ -7,6 +7,8 @@ services:
     buildCommand: pip install uv && uv sync
     startCommand: uv run uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
+      - key: NIXPACKS_PYTHON_PACKAGE_MANAGER
+        value: uv
       - key: PYTHON_VERSION
         value: 3.11.0
       - key: GROQ_API_KEY
@@ -30,6 +32,8 @@ services:
     buildCommand: pip install uv && uv sync
     startCommand: uv run python agent.py console
     envVars:
+      - key: NIXPACKS_PYTHON_PACKAGE_MANAGER
+        value: uv
       - key: PYTHON_VERSION
         value: 3.11.0
       - key: GROQ_API_KEY

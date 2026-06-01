@@ -12,3 +12,12 @@ langchain-experimental
 pypdf
 firebase-admin
 slowapi
+livekit-agents
+livekit-plugins-openai
+livekit-plugins-deepgram
+livekit-plugins-elevenlabs
+livekit-plugins-silero
+langchain-chroma>=1.1.0
+pydantic-settings>=2.14.1
+langchain-classic>=1.0.7
+langchain-community>=0.4.1
