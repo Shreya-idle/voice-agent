@@ -53,13 +53,15 @@ class TestRAGEngine:
             mock_loader.assert_called_with("test.txt")
 
     def test_load_documents_pdf(self, mock_embeddings, mock_chroma):
-        with patch('rag_engine.PyPDFLoader') as mock_loader:
+        with patch('rag_engine.PyPDFLoader') as mock_loader, \
+             patch('os.path.exists', return_value=True):
             engine = RAGEngine(data_path="test.pdf")
             engine._load_documents()
             mock_loader.assert_called_with("test.pdf")
 
     def test_chunk_semantically(self, mock_embeddings, mock_chroma):
-        with patch('rag_engine.SemanticChunker') as mock_splitter:
+        with patch('rag_engine.SemanticChunker') as mock_splitter, \
+             patch('rag_engine.RAGEngine._build_vector_store'):
             engine = RAGEngine()
             mock_docs = [Mock()]
             engine._chunk_semantically(mock_docs)

@@ -13,8 +13,12 @@ client = TestClient(app)
 @pytest.fixture(autouse=True)
 def mock_auth_dependency():
     app.dependency_overrides[verify_firebase_token] = lambda: "user123"
+    if hasattr(app.state, "limiter"):
+        app.state.limiter.enabled = False
     yield
     app.dependency_overrides.clear()
+    if hasattr(app.state, "limiter"):
+        app.state.limiter.enabled = True
 
 @pytest.fixture
 def mock_elevenlabs():
@@ -104,6 +108,8 @@ class TestMainAPI:
             assert response.json() == {"credits": 10}
 
     def test_verify_firebase_token_invalid(self):
+        # Clear the autouse override so the real verify_firebase_token runs
+        app.dependency_overrides.clear()
         with patch('main.FIREBASE_INITIALIZED', True), \
              patch('firebase_admin.auth.verify_id_token', side_effect=Exception("Invalid token")):
             response = client.get("/user/user123/credits", headers={"Authorization": "Bearer invalid_token"})
@@ -128,7 +134,7 @@ class TestMainAPI:
             response = client.post("/chat", json={"message": "hello", "uid": "user123"})
             assert response.status_code == 503
 
-    def test_chat_out_of_credits(self, mock_firestore):
+    def test_chat_out_of_credits(self, mock_firestore, mock_qa_chain):
         mock_user_doc = Mock()
         mock_user_doc.exists = True
         mock_user_doc.to_dict.return_value = {"credits": 0}
