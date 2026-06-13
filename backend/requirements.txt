@@ -2,13 +2,11 @@ fastapi
 uvicorn
 langchain
 langchain-groq
-langchain-huggingface
+langchain-text-splitters
 chromadb
 elevenlabs
 python-dotenv
 pydantic
-sentence-transformers
-langchain-experimental
 pypdf
 firebase-admin
 slowapi
@@ -21,3 +19,4 @@ langchain-chroma>=1.1.0
 pydantic-settings>=2.14.1
 langchain-classic>=1.0.7
 langchain-community>=0.4.1
+

@@ -1,7 +1,10 @@
 import logging
 import os
 import json
-from datetime import datetime
+import time
+import calendar
+import jwt
+from datetime import datetime, timedelta, timezone
 from contextlib import asynccontextmanager
 from typing import Optional
 import uuid
@@ -301,14 +304,25 @@ async def get_token(room: str, identity: str, request: Request, auth_uid: str = 
         )
     
     try:
-        token = api.AccessToken(settings.livekit_api_key, settings.livekit_api_secret) \
-            .with_identity(identity) \
-            .with_grants(api.VideoGrants(
-                room_join=True,
-                room=room,
-            ))
-        
-        return {"token": token.to_jwt()}
+        token = api.AccessToken(settings.livekit_api_key, settings.livekit_api_secret)
+        token.with_identity(identity)
+        token.with_grants(api.VideoGrants(room_join=True, room=room))
+        token.with_ttl(timedelta(minutes=5))
+
+        now = datetime.now(timezone.utc)
+        jwt_claims = token.claims.asdict()
+        jwt_claims.update({
+            "sub": identity,
+            "iss": settings.livekit_api_key,
+            
+            "nbf": calendar.timegm((now - timedelta(seconds=5)).utctimetuple()),
+            "exp": calendar.timegm((now + token.ttl).utctimetuple()),
+        })
+
+        token_str = jwt.encode(jwt_claims, settings.livekit_api_secret, algorithm="HS256")
+        if isinstance(token_str, bytes):
+            token_str = token_str.decode("utf-8")
+        return {"token": token_str}
     except Exception as e:
         logger.error(f"Error generating token: {e}")
         raise HTTPException(status_code=500, detail=str(e))

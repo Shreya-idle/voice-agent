@@ -171,7 +171,7 @@ class TestMainAPI:
     def test_get_token_success(self):
         with patch('main.settings.livekit_api_key', "key"), \
              patch('main.settings.livekit_api_secret', "secret"), \
-             patch('livekit.api.AccessToken.to_jwt', return_value="mocked_token"):
+             patch('main.jwt.encode', return_value="mocked_token"):
             response = client.get("/token?room=room1&identity=user123")
             assert response.status_code == 200
             assert response.json() == {"token": "mocked_token"}

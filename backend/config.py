@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     
     elevenlabs_api_key: Optional[str] = Field(None, alias="ELEVENLABS_API_KEY")
     deepgram_api_key: Optional[str] = Field(None, alias="DEEPGRAM_API_KEY")
+    huggingface_api_key: Optional[str] = Field(None, alias="HUGGINGFACE_API_KEY")
 
     livekit_url: Optional[str] = Field(None, alias="LIVEKIT_URL")
     livekit_api_key: Optional[str] = Field(None, alias="LIVEKIT_API_KEY")
