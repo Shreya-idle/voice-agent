@@ -17,6 +17,7 @@ livekit-plugins-elevenlabs
 livekit-plugins-silero
 langchain-chroma>=1.1.0
 pydantic-settings>=2.14.1
+mutagen>=1.47.0
 langchain-classic>=1.0.7
 langchain-community>=0.4.1
 

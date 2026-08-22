@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
@@ -140,7 +140,10 @@ const IconPhone = () => (
 function WaveSticks({ count = 9, active, side }) {
   const [heights, setHeights] = useState(() => Array(count).fill(4));
   useEffect(() => {
-    if (!active) { setHeights(Array(count).fill(4)); return; }
+    if (!active) {
+      const resetId = setTimeout(() => setHeights(Array(count).fill(4)), 0);
+      return () => clearTimeout(resetId);
+    }
     const id = setInterval(() => {
       setHeights(prev => prev.map(() => Math.floor(Math.random() * 20) + 3));
     }, 120);
@@ -215,8 +218,8 @@ export default function App() {
     const timeout = expirationTime - Date.now() - 60000; // Refresh 1 minute before expiry
 
     if (timeout <= 0) {
-      fetchAndSetToken();
-      return;
+      const refreshId = setTimeout(fetchAndSetToken, 0);
+      return () => clearTimeout(refreshId);
     }
 
     const timer = setTimeout(fetchAndSetToken, timeout);
@@ -267,6 +270,7 @@ export default function App() {
 }
 
 function ChatShell({ uid, onDisconnect }) {
+  const [conversationId]      = useState(() => crypto.randomUUID());
   const [messages, setMessages]   = useState([
     { role: 'agent', content: 'Connected! I am listening. How can I help you?', time: nowTime() },
   ]);
@@ -286,21 +290,7 @@ function ChatShell({ uid, onDisconnect }) {
     if (el) setTimeout(() => { el.scrollTop = el.scrollHeight; }, 40);
   }, [messages]);
 
-  useEffect(() => {
-    fetchCredits();
-    fetchAnalytics();
-    const onData = (payload) => {
-      try {
-        const data = JSON.parse(new TextDecoder().decode(payload));
-        if (data.type === 'transcript')
-          setMessages(p => [...p, { role: data.role, content: data.content, time: nowTime() }]);
-      } catch {}
-    };
-    room.on(RoomEvent.DataReceived, onData);
-    return () => room.off(RoomEvent.DataReceived, onData);
-  }, [room]);
-
-  const fetchCredits = async () => {
+  const fetchCredits = useCallback(async () => {
     if (!uid) return;
     try { 
       const token = await auth.currentUser?.getIdToken();
@@ -309,9 +299,9 @@ function ChatShell({ uid, onDisconnect }) {
       }); 
       setCredits(data.credits); 
     }
-    catch {}
-  };
-  const fetchAnalytics = async () => {
+    catch (error) { console.error('Credits fetch error:', error); }
+  }, [uid]);
+  const fetchAnalytics = useCallback(async () => {
     try { 
       
       const token = await auth.currentUser?.getIdToken();
@@ -321,8 +311,27 @@ function ChatShell({ uid, onDisconnect }) {
       }); 
       setAnalytics(data); 
     }
-    catch {}
-  };
+    catch (error) { console.error('Analytics fetch error:', error); }
+  }, []);
+
+  useEffect(() => {
+    const loadId = setTimeout(() => {
+      fetchCredits();
+      fetchAnalytics();
+    }, 0);
+    const onData = (payload) => {
+      try {
+        const data = JSON.parse(new TextDecoder().decode(payload));
+        if (data.type === 'transcript')
+          setMessages(p => [...p, { role: data.role, content: data.content, time: nowTime() }]);
+      } catch (error) { console.error('Transcript message error:', error); }
+    };
+    room.on(RoomEvent.DataReceived, onData);
+    return () => {
+      clearTimeout(loadId);
+      room.off(RoomEvent.DataReceived, onData);
+    };
+  }, [room, fetchCredits, fetchAnalytics]);
 
   const toggleMic = async () => {
     if (localParticipant) await localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled);
@@ -338,18 +347,15 @@ function ChatShell({ uid, onDisconnect }) {
     try {
       const token = await auth.currentUser?.getIdToken();
       const { data } = await axios.post(`${API_URL}/chat`, 
-        { message: msg, uid },
+        { message: msg, uid, conversationId },
         { headers: { 'Authorization': `Bearer ${token}` } }
       );
-      const { response: answer, audio_url, remaining_credits } = data;
+      const { response: answer, remaining_credits } = data;
       setMessages(p => [...p, { role: 'agent', content: answer, time: nowTime() }]);
       if (remaining_credits !== undefined) setCredits(remaining_credits);
-      if (audio_url) {
-        const a = new Audio(`${API_URL.replace(/\/$/, '')}${audio_url}`);
-        a.play().catch(console.error);
-      }
       fetchAnalytics();
-    } catch {
+    } catch (error) {
+      console.error('Chat request error:', error);
       setMessages(p => [...p, { role: 'agent', content: 'Error connecting to backend.', time: nowTime() }]);
     } finally { setSending(false); }
   };

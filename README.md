@@ -90,8 +90,19 @@ The backend expects values for:
 - `LIVEKIT_API_SECRET`
 - `FIREBASE_SERVICE_ACCOUNT`
 - `ELEVENLABS_API_KEY` (optional)
+- `FIREBASE_STORAGE_BUCKET` (required for persistent audio, for example `voiceagent-f1e76.firebasestorage.app`)
+- `AUDIO_RETENTION_HOURS` (optional, defaults to `24`)
+- `CORS_ORIGINS` (required in production; comma-separated frontend origins)
 - `DATA_PATH` (optional, overrides default document path)
 - `PERSIST_DIRECTORY` (optional)
+
+Generated MP3 files are uploaded by the backend to Firebase Storage at
+`audio/{userId}/{conversationId}/{audioId}.mp3`. Firestore stores the conversation,
+message, and audio metadata; the MP3 binary is never stored in Firestore. The
+frontend receives the current response only and no conversation-history endpoint
+is exposed. Firebase Storage rules deny direct client access. Cleanup runs at
+backend startup and before a new upload; configure the bucket lifecycle rule
+from `storage.lifecycle.json` for production enforcement.
 
 ### Frontend
 

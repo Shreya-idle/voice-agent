@@ -10,12 +10,11 @@ from typing import Optional
 import uuid
 
 import firebase_admin
-from firebase_admin import credentials, firestore, auth
+from firebase_admin import credentials, firestore, auth, storage
 
 from fastapi import FastAPI, HTTPException, Request, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -30,6 +29,8 @@ from livekit import api
 from rag_engine import RAGEngine
 from config import settings
 from schemas import ChatRequest, ChatResponse
+from audio_storage import FirebaseStorage, create_audio_asset
+from conversation_store import FirestoreConversationStore
 
 
 logging.basicConfig(level=logging.INFO)
@@ -41,28 +42,37 @@ print(f"DEBUG: ElevenLabs API Key: {settings.elevenlabs_api_key[:5]}..." if sett
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 KEY_PATH = os.path.join(BASE_DIR, "serviceAccountKey.json")
+firebase_options = {}
+if settings.firebase_storage_bucket:
+    firebase_options["storageBucket"] = settings.firebase_storage_bucket
 
 try:
     if not firebase_admin._apps:
         if os.path.exists(KEY_PATH):
             print(f"Found serviceAccountKey at: {KEY_PATH}")
             cred = credentials.Certificate(KEY_PATH)
-            firebase_admin.initialize_app(cred)
+            firebase_admin.initialize_app(cred, firebase_options)
         elif os.environ.get("FIREBASE_SERVICE_ACCOUNT"):
             print("Found FIREBASE_SERVICE_ACCOUNT in environment")
             service_account_info = json.loads(os.environ.get("FIREBASE_SERVICE_ACCOUNT"))
             cred = credentials.Certificate(service_account_info)
-            firebase_admin.initialize_app(cred)
+            firebase_admin.initialize_app(cred, firebase_options)
         else:
             print(f"NOT found at: {KEY_PATH} and FIREBASE_SERVICE_ACCOUNT not set")
-            firebase_admin.initialize_app()
+            firebase_admin.initialize_app(options=firebase_options)
     db = firestore.client()
+    try:
+        audio_storage = FirebaseStorage(storage.bucket())
+    except Exception as e:
+        logger.warning(f"Firebase Storage is unavailable: {e}")
+        audio_storage = None
     FIREBASE_INITIALIZED = True
     logger.info("Firebase Admin initialized successfully.")
 except Exception as e:
     logger.warning(f"Firebase Admin initialization failed: {e}")
     FIREBASE_INITIALIZED = False
     db = None
+    audio_storage = None
 
 class VoiceAgentApp:
     def __init__(self):
@@ -135,21 +145,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-audio_directory = os.path.join(BASE_DIR, "static", "audio")
-os.makedirs(audio_directory, exist_ok=True)
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
 def cleanup_expired_audio() -> int:
     """Remove generated speech older than the configured retention period."""
-    cutoff = time.time() - settings.audio_retention_hours * 60 * 60
-    removed = 0
-    for entry in os.scandir(audio_directory):
-        if entry.is_file() and entry.name.endswith(".mp3") and entry.stat().st_mtime < cutoff:
-            try:
-                os.remove(entry.path)
-                removed += 1
-            except OSError as exc:
-                logger.warning("Could not remove expired audio %s: %s", entry.path, exc)
+    if not audio_storage:
+        return 0
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=settings.audio_retention_hours)
+    try:
+        removed = audio_storage.cleanup_expired("audio/", cutoff)
+    except Exception as exc:
+        logger.warning("Could not clean up expired Firebase audio: %s", exc)
+        return 0
     if removed:
         logger.info("Removed %d expired audio file(s).", removed)
     return removed
@@ -192,7 +197,6 @@ async def get_user_credits(uid: str, request: Request, auth_uid: str = Depends(v
         logger.error(f"Failed to fetch credits: {e}")
         return {"credits": 10}
 
-
 @app.post("/chat", response_model=ChatResponse)
 @limiter.limit("10/minute")
 async def chat(request: Request, chat_request: ChatRequest, auth_uid: str = Depends(verify_firebase_token)):
@@ -234,9 +238,27 @@ async def chat(request: Request, chat_request: ChatRequest, auth_uid: str = Depe
         for doc in source_docs:
             print(f"   - {doc.metadata.get('source', 'unknown')}: {doc.page_content[:100]}")
     
-        audio_url = handle_tts(answer)
+        conversation_id = chat_request.conversation_id or str(uuid.uuid4())
+        message_id = str(uuid.uuid4())
+        audio_asset = None
+        audio_uploaded = False
+        if audio_storage and effective_uid:
+            try:
+                audio_bytes = generate_tts_audio(answer)
+                audio_asset = create_audio_asset(
+                    audio_bytes,
+                    effective_uid,
+                    conversation_id,
+                    f"aud_{message_id}",
+                    settings.audio_retention_hours,
+                )
+                audio_storage.upload(audio_bytes, audio_asset.storage_path, audio_asset.mime_type)
+                audio_uploaded = True
+            except Exception as e:
+                logger.error(f"Audio generation or upload failed: {e}")
 
-        if db:
+        if db and effective_uid:
+            conversation_store = FirestoreConversationStore(db)
             unanswered_phrases = [
                 "don't know", "do not know", "couldn't find", "could not find",
                 "not mentioned", "not stated", "sorry", "no information",
@@ -245,28 +267,53 @@ async def chat(request: Request, chat_request: ChatRequest, auth_uid: str = Depe
             ]
             is_answered = not any(phrase in answer.lower() for phrase in unanswered_phrases)
             
-            try:
-                transcript_data = {
-                    "uid": effective_uid,
-                    "question": chat_request.message,
-                    "answer": answer,
-                    "is_answered": is_answered,
-                    "timestamp": firestore.SERVER_TIMESTAMP,
-                    "metadata": {
-                        "model": settings.groq_model_name,
-                        "remaining_credits": remaining_credits - 1 if effective_uid else remaining_credits
-                    }
+            audio_metadata = None
+            if audio_asset and audio_uploaded:
+                audio_metadata = {
+                    "audioId": audio_asset.audio_id,
+                    "storagePath": audio_asset.storage_path,
+                    "duration": audio_asset.duration,
+                    "mimeType": audio_asset.mime_type,
+                    "createdAt": audio_asset.created_at,
+                    "expiresAt": audio_asset.expires_at,
                 }
-                db.collection('transcripts').add(transcript_data)
-                logger.info(f"Transcript saved for user: {effective_uid}")
+            try:
+                conversation_store.save_message(
+                    effective_uid,
+                    conversation_id,
+                    message_id,
+                    chat_request.message,
+                    answer,
+                    audio_metadata,
+                )
+                conversation_store.save_analytics_transcript(
+                    effective_uid,
+                    chat_request.message,
+                    answer,
+                    is_answered,
+                )
+                logger.info(f"Conversation message saved for user: {effective_uid}")
             except Exception as e:
-                logger.error(f"Failed to save transcript: {e}")
+                if audio_uploaded and audio_asset:
+                    try:
+                        audio_storage.delete(audio_asset.storage_path)
+                    except Exception as cleanup_error:
+                        logger.error(f"Failed to remove orphaned audio: {cleanup_error}")
+                    audio_uploaded = False
+                    audio_asset = None
+                logger.error(f"Failed to save conversation: {e}")
 
         if db and effective_uid:
             remaining_credits -= 1
             user_ref.update({"credits": remaining_credits})
 
-        return ChatResponse(response=answer, audio_url=audio_url, remaining_credits=remaining_credits)
+        return ChatResponse(
+            response=answer,
+            audio_url=None,
+            conversation_id=conversation_id,
+            audio_path=audio_asset.storage_path if audio_asset and audio_uploaded else None,
+            remaining_credits=remaining_credits,
+        )
 
     except Exception as e:
         logger.error(f"Error during chat processing: {e}")
@@ -343,35 +390,19 @@ async def get_token(room: str, identity: str, request: Request, auth_uid: str = 
         logger.error(f"Error generating token: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-def handle_tts(text: str) -> Optional[str]:
+def generate_tts_audio(text: str) -> bytes:
     logger.info(f"Generating TTS for text: {text[:50]}...")
     if not eleven_client:
-        logger.warning("ElevenLabs client not initialized. Check API key.")
-        return None
-    
-    try:
-        audio_generator = eleven_client.text_to_speech.convert(
-            text=text,
-            voice_id="EXAVITQu4vr4xnSDxMaL",
-            model_id="eleven_multilingual_v2"
-        )
-        
-        filename = f"{uuid.uuid4()}.mp3"
-        cleanup_expired_audio()
-        filepath = os.path.join(audio_directory, filename)
-        
-        logger.info(f"Saving audio to {filepath}")
-        audio_bytes = b"".join(list(audio_generator))
-        
-        with open(filepath, "wb") as f:
-            f.write(audio_bytes)
-            
-        url = f"/static/audio/{filename}"
-        logger.info(f"TTS generated successfully: {url}")
-        return url
-    except Exception as e:
-        logger.error(f"Error generating TTS: {e}")
-        return None
+        raise RuntimeError("ElevenLabs client not initialized")
+    audio_generator = eleven_client.text_to_speech.convert(
+        text=text,
+        voice_id="EXAVITQu4vr4xnSDxMaL",
+        model_id="eleven_multilingual_v2"
+    )
+    audio_bytes = b"".join(audio_generator)
+    if not audio_bytes:
+        raise RuntimeError("ElevenLabs returned an empty audio response")
+    return audio_bytes
 
 if __name__ == "__main__":
     import uvicorn
