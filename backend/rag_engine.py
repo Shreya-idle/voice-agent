@@ -15,9 +15,11 @@ load_dotenv()
 
 class FallbackEmbeddings(Embeddings):
     """
-    Wraps a primary Embeddings instance (like HuggingFaceInferenceAPIEmbeddings)
-    and falls back to zero-vectors if network connectivity, name resolution, or
-    API issues occur. This ensures the app can start up and run offline.
+    Wraps a primary Embeddings instance and fails clearly if it is unavailable.
+
+    Returning zero vectors makes every document equally similar and silently
+    turns RAG into arbitrary retrieval. A visible failure is safer than an
+    answer that appears grounded but is not.
     """
     def __init__(self, primary: Embeddings, dimension: int = 384):
         self.primary = primary
@@ -25,24 +27,18 @@ class FallbackEmbeddings(Embeddings):
         self._fallback = False
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        if self._fallback:
-            return [[0.0] * self.dimension for _ in texts]
         try:
             return self.primary.embed_documents(texts)
         except Exception as e:
-            print(f"⚠️ Primary embeddings failed: {e}. Falling back to offline dummy embeddings (zero vectors).")
             self._fallback = True
-            return [[0.0] * self.dimension for _ in texts]
+            raise RuntimeError("Embedding provider is unavailable; RAG cannot safely retrieve context.") from e
 
     def embed_query(self, text: str) -> List[float]:
-        if self._fallback:
-            return [0.0] * self.dimension
         try:
             return self.primary.embed_query(text)
         except Exception as e:
-            print(f"⚠️ Primary embeddings failed: {e}. Falling back to offline dummy embeddings (zero vectors).")
             self._fallback = True
-            return [0.0] * self.dimension
+            raise RuntimeError("Embedding provider is unavailable; RAG cannot safely retrieve context.") from e
 
 class RAGEngine:
     def __init__(
@@ -133,7 +129,7 @@ class RAGEngine:
         if not documents:
             return []
         if not self.api_key:
-            print("⚠️ Hugging Face API Key is missing. Skipping reranking, returning vector search order.")
+            print("Warning: Hugging Face API Key is missing. Skipping reranking, returning vector search order.")
             return documents[:k]
 
         url = "https://api-inference.huggingface.co/models/cross-encoder/ms-marco-MiniLM-L-6-v2"
@@ -165,10 +161,10 @@ class RAGEngine:
                 scored_docs.sort(key=lambda x: x[0], reverse=True)
                 return [doc for _, doc in scored_docs[:k]]
             else:
-                print(f"⚠️ Hugging Face Inference API error ({response.status_code}): {response.text}. Skipping reranking.")
+                print(f"Warning: Hugging Face Inference API error ({response.status_code}): {response.text}. Skipping reranking.")
                 return documents[:k]
         except Exception as e:
-            print(f"⚠️ Failed to rerank documents via Hugging Face API: {e}. Skipping reranking.")
+            print(f"Warning: Failed to rerank documents via Hugging Face API: {e}. Skipping reranking.")
             return documents[:k]
 
     def summarize_context(self, context: str, max_length: int = 150) -> str:
@@ -179,7 +175,7 @@ class RAGEngine:
         if not context.strip():
             return ""
         if not self.api_key:
-            print("⚠️ Hugging Face API Key is missing. Skipping summarization, returning raw context.")
+            print("Warning: Hugging Face API Key is missing. Skipping summarization, returning raw context.")
             return context
 
         url = "https://api-inference.huggingface.co/models/facebook/bart-large-cnn"
@@ -207,10 +203,10 @@ class RAGEngine:
                     return summary_data[0].get("summary_text", context)
                 return context
             else:
-                print(f"⚠️ Hugging Face Summarizer API error ({response.status_code}): {response.text}. Skipping summarization.")
+                print(f"Warning: Hugging Face Summarizer API error ({response.status_code}): {response.text}. Skipping summarization.")
                 return context
         except Exception as e:
-            print(f"⚠️ Failed to summarize context via Hugging Face API: {e}. Skipping summarization.")
+            print(f"Warning: Failed to summarize context via Hugging Face API: {e}. Skipping summarization.")
             return context
 
     def query(self, text: str, k: int = 3, rerank: bool = True, top_n: int = 10) -> List[Document]:

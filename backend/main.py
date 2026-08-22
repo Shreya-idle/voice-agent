@@ -112,6 +112,7 @@ agent_app = VoiceAgentApp()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    cleanup_expired_audio()
     agent_app.initialize()
     yield
 
@@ -128,14 +129,30 @@ app.add_middleware(SlowAPIMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.allowed_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-os.makedirs("static/audio", exist_ok=True)
+audio_directory = os.path.join(BASE_DIR, "static", "audio")
+os.makedirs(audio_directory, exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+def cleanup_expired_audio() -> int:
+    """Remove generated speech older than the configured retention period."""
+    cutoff = time.time() - settings.audio_retention_hours * 60 * 60
+    removed = 0
+    for entry in os.scandir(audio_directory):
+        if entry.is_file() and entry.name.endswith(".mp3") and entry.stat().st_mtime < cutoff:
+            try:
+                os.remove(entry.path)
+                removed += 1
+            except OSError as exc:
+                logger.warning("Could not remove expired audio %s: %s", entry.path, exc)
+    if removed:
+        logger.info("Removed %d expired audio file(s).", removed)
+    return removed
 
 @app.get("/")
 @limiter.limit("20/minute")
@@ -146,7 +163,8 @@ security = HTTPBearer()
 
 def verify_firebase_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     if not FIREBASE_INITIALIZED:
-        return "unauthenticated_uid" 
+        logger.error("Refusing authenticated request because Firebase Admin is unavailable.")
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Authentication service is unavailable")
     try:
         decoded_token = auth.verify_id_token(credentials.credentials)
         return decoded_token['uid']
@@ -161,10 +179,8 @@ def verify_firebase_token(credentials: HTTPAuthorizationCredentials = Depends(se
 @app.get("/user/{uid}/credits")
 @limiter.limit("10/minute")
 async def get_user_credits(uid: str, request: Request, auth_uid: str = Depends(verify_firebase_token)):
-    if auth_uid != uid and FIREBASE_INITIALIZED:
+    if auth_uid != uid:
         raise HTTPException(status_code=403, detail="Not authorized to access these credits")
-    if not FIREBASE_INITIALIZED or not db:
-        return {"credits": 10}
     try:
         user_ref = db.collection('users').document(uid)
         user_doc = user_ref.get()
@@ -183,7 +199,7 @@ async def chat(request: Request, chat_request: ChatRequest, auth_uid: str = Depe
     user_ref = None
     remaining_credits = 10
    
-    effective_uid = auth_uid if FIREBASE_INITIALIZED else chat_request.uid
+    effective_uid = auth_uid
    
     if not agent_app.qa_chain:
         raise HTTPException(
@@ -191,7 +207,7 @@ async def chat(request: Request, chat_request: ChatRequest, auth_uid: str = Depe
             detail="Voice Agent components are not initialized"
         )
     
-    if FIREBASE_INITIALIZED and db and effective_uid:
+    if db and effective_uid:
         user_ref = db.collection('users').document(effective_uid)
         user_doc = user_ref.get()
         
@@ -220,7 +236,7 @@ async def chat(request: Request, chat_request: ChatRequest, auth_uid: str = Depe
     
         audio_url = handle_tts(answer)
 
-        if FIREBASE_INITIALIZED and db:
+        if db:
             unanswered_phrases = [
                 "don't know", "do not know", "couldn't find", "could not find",
                 "not mentioned", "not stated", "sorry", "no information",
@@ -246,7 +262,7 @@ async def chat(request: Request, chat_request: ChatRequest, auth_uid: str = Depe
             except Exception as e:
                 logger.error(f"Failed to save transcript: {e}")
 
-        if FIREBASE_INITIALIZED and db and effective_uid:
+        if db and effective_uid:
             remaining_credits -= 1
             user_ref.update({"credits": remaining_credits})
 
@@ -292,7 +308,7 @@ async def get_analytics(request: Request):
 @app.get("/token")
 @limiter.limit("5/minute")
 async def get_token(room: str, identity: str, request: Request, auth_uid: str = Depends(verify_firebase_token)):
-    if auth_uid != identity and FIREBASE_INITIALIZED:
+    if auth_uid != identity:
         raise HTTPException(
             status_code=403,
             detail="Not authorized to request token for this identity"
@@ -341,7 +357,8 @@ def handle_tts(text: str) -> Optional[str]:
         )
         
         filename = f"{uuid.uuid4()}.mp3"
-        filepath = os.path.join("static", "audio", filename)
+        cleanup_expired_audio()
+        filepath = os.path.join(audio_directory, filename)
         
         logger.info(f"Saving audio to {filepath}")
         audio_bytes = b"".join(list(audio_generator))

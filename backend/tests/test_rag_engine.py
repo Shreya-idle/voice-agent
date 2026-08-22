@@ -109,8 +109,8 @@ class TestRAGEngine:
             with pytest.raises(FileNotFoundError):
                 RAGEngine(data_path="missing.pdf")
 
-    def test_init_offline_fallback(self, mock_embeddings, mock_chroma, mock_settings):
-        """Verify that RAGEngine initializes successfully and builds vector store even if embeddings API fails with network error."""
+    def test_init_fails_when_embeddings_are_unavailable(self, mock_embeddings, mock_chroma, mock_settings):
+        """RAG must not start with zero vectors when its embedding provider fails."""
         import requests
         mock_instance = mock_embeddings.return_value
         mock_instance.embed_documents.side_effect = requests.exceptions.ConnectionError("DNS resolution failed")
@@ -127,10 +127,8 @@ class TestRAGEngine:
              patch('rag_engine.RAGEngine._load_documents', return_value=[Mock(page_content="hello")]), \
              patch('rag_engine.RAGEngine._chunk_documents', return_value=[Mock(page_content="hello")]):
             
-            engine = RAGEngine()
-            assert engine.vector_store is not None
-            assert engine.embeddings._fallback is True
-            mock_chroma.from_documents.assert_called_once()
+            with pytest.raises(RuntimeError, match="cannot safely retrieve context"):
+                RAGEngine()
 
 
 
@@ -326,11 +324,10 @@ class TestFallbackEmbeddings:
         
         fallback = FallbackEmbeddings(mock_primary, dimension=2)
         
-        docs_res = fallback.embed_documents(["test"])
-        assert docs_res == [[0.0, 0.0]]
+        with pytest.raises(RuntimeError, match="cannot safely retrieve context"):
+            fallback.embed_documents(["test"])
         assert fallback._fallback is True
-        
-        mock_primary.reset_mock()
-        query_res = fallback.embed_query("test")
-        assert query_res == [0.0, 0.0]
-        mock_primary.embed_query.assert_not_called()
+
+        with pytest.raises(RuntimeError, match="cannot safely retrieve context"):
+            fallback.embed_query("test")
+        mock_primary.embed_query.assert_called_once()

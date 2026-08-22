@@ -1,6 +1,7 @@
 import logging
 import os
 import json
+import asyncio
 from dotenv import load_dotenv
 
 import firebase_admin
@@ -83,18 +84,29 @@ def save_voice_transcript(question: str, answer: str):
     except Exception as e:
         logger.error(f"Failed to save voice transcript: {e}")
 
+async def publish_transcript(room, role: str, content: str) -> None:
+    """Publish text turns for the connected chat UI alongside spoken audio."""
+    try:
+        await room.local_participant.publish_data(
+            json.dumps({"type": "transcript", "role": role, "content": content}),
+            reliable=True,
+            topic="transcript",
+        )
+    except Exception as exc:
+        logger.warning("Could not publish voice transcript: %s", exc)
+
 
 class Assistant(Agent):
     def __init__(self) -> None:
         super().__init__(
             instructions=f"""You are a professional and helpful voice assistant.
-Your goal is to answer questions about the person described below based on their resume.
+Your goal is to answer questions using the provided knowledge base.
 Keep your responses concise and natural for a voice conversation - under 30 words when possible.
 Use casual, spoken language. Never use bullet points, markdown, or special formatting.
-If the resume information does not contain the answer or you don't know it, you MUST say exactly: "I am sorry, but I don't know the answer to that based on Amit's resume."
+If the knowledge base does not contain the answer or you don't know it, you MUST say exactly: "I am sorry, but I don't know the answer based on the knowledge base."
 Do NOT make up or infer answers.
 
-Here is the resume information:
+Here is the knowledge base:
 {resume_context}"""
         )
 
@@ -147,7 +159,9 @@ async def voice_agent_session(ctx: agents.JobContext):
             
             if role == "user":
                 last_user_question = text
+                asyncio.create_task(publish_transcript(ctx.room, "user", text))
             elif role == "assistant":
+                asyncio.create_task(publish_transcript(ctx.room, "agent", text))
                 if last_user_question:
                     save_voice_transcript(last_user_question, text)
                     last_user_question = None

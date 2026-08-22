@@ -11,9 +11,95 @@ import {
   useLocalParticipant,
 } from '@livekit/components-react';
 import { Track, RoomEvent } from 'livekit-client';
+import './App.css';
 
 const API_URL      = import.meta.env.VITE_BACKEND_URL  
 const LIVEKIT_URL  = import.meta.env.VITE_LIVEKIT_URL  
+
+const CLONE_STAGES = [
+  { label: 'Stage 1', kicker: 'Voice waveform / microphone', title: 'Analyzing your voice…', detail: 'Capturing vocal tone and cadence', type: 'voice' },
+  { label: 'Stage 2', kicker: 'AI thinking / processing', title: 'Understanding voice characteristics…', detail: 'Mapping pitch, pace, and expression', type: 'brain' },
+  { label: 'Stage 3', kicker: 'Voice cloning / neural processing', title: 'Generating your cloned voice…', detail: 'Training a unique neural voice model', type: 'neural' },
+  { label: 'Stage 4', kicker: 'Enhancing / polishing voice', title: 'Polishing the audio…', detail: 'Balancing clarity and natural resonance', type: 'polish' },
+  { label: 'Stage 5', kicker: 'Audio waveform generation', title: 'Adding natural expression…', detail: 'Finishing the final listening experience', type: 'finish' },
+];
+
+function StageVisual({ type }) {
+  if (type === 'voice' || type === 'polish') {
+    return <div className="clone-wave" aria-hidden="true">{Array.from({ length: 17 }, (_, index) => <i key={index} />)}</div>;
+  }
+  if (type === 'brain') return <div className="clone-brain" aria-hidden="true"><span>✦</span><b>◌</b><em>✧</em></div>;
+  if (type === 'neural') return <div className="clone-neural" aria-hidden="true"><div className="dna">⌁</div><span /><span /><span /><span /><span /></div>;
+  return <div className="clone-finish" aria-hidden="true"><span /><span /><span /><b>✓</b></div>;
+}
+
+function CloneFlow({ onComplete }) {
+  const [activeStage, setActiveStage] = useState(0);
+  const stage = CLONE_STAGES[activeStage];
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (activeStage === CLONE_STAGES.length - 1) onComplete();
+      else setActiveStage(current => current + 1);
+    }, 2600);
+    return () => window.clearTimeout(timer);
+  }, [activeStage, onComplete]);
+
+  if (window.__cloneFlowLegacy) return (
+    <main className={`clone-flow clone-flow--${stage.type}`}>
+      <div className="clone-orbit clone-orbit--one" />
+      <div className="clone-orbit clone-orbit--two" />
+      <header className="clone-header">
+        <div className="clone-brand"><span>◈</span> CLONEVOX</div>
+        <button className="clone-skip" type="button" onClick={onComplete}>Skip intro</button>
+      </header>
+      <section className="clone-content" aria-live="polite">
+        <div className="clone-stage-label">{stage.label}<span> / 5</span></div>
+        <AnimatePresence mode="wait">
+          <motion.div
+            className="clone-stage"
+            key={stage.type}
+            initial={{ opacity: 0, y: 16, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -12, scale: 0.98 }}
+            transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <div className="clone-visual"><StageVisual type={stage.type} /></div>
+            <p className="clone-kicker">{stage.kicker}</p>
+            <h1>{stage.title}</h1>
+            <p className="clone-detail">{stage.detail}</p>
+          </motion.div>
+        </AnimatePresence>
+        <div className="clone-progress-wrap">
+          <div className="clone-progress" key={activeStage}><span /></div>
+          <div className="clone-progress-caption"><span>Generation in progress</span><span>{Math.round(((activeStage + 1) / 5) * 100)}%</span></div>
+        </div>
+      </section>
+      <nav className="clone-steps" aria-label="Voice generation progress">
+        {CLONE_STAGES.map((item, index) => <div className={`clone-step ${index === activeStage ? 'is-active' : ''} ${index < activeStage ? 'is-complete' : ''}`} key={item.type}><span>{index < activeStage ? '✓' : `0${index + 1}`}</span><i /></div>)}
+      </nav>
+    </main>
+  );
+  return <FlowOverview stage={stage} activeStage={activeStage} setActiveStage={setActiveStage} onComplete={onComplete} />;
+}
+
+function FlowOverview({ stage, activeStage, setActiveStage, onComplete }) {
+  return <main className="clone-flow flow-overview" aria-label="CloneVox voice generation flow">
+    <header className="flow-header"><div><div className="flow-brand">CLONEVOX</div><h1>GENERATION FLOW</h1></div><button className="flow-skip" type="button" onClick={onComplete}>Skip animation</button></header>
+    <section className="flow-canvas" aria-live="polite">
+      <svg className="flow-lines" viewBox="0 0 1200 620" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="flowLine" x1="0" x2="1"><stop stopColor="#4ee1df"/><stop offset=".52" stopColor="#718eff"/><stop offset="1" stopColor="#9d6bff"/></linearGradient></defs><path d="M210 290H318M472 290H555M696 290H798M951 290H1080M923 244V104H1080M210 338V502H536M1080 502H760" /></svg>
+      <div className="flow-side flow-side--left">{CLONE_STAGES.slice(0, 2).map((item, index) => <FlowCard item={item} index={index} activeStage={activeStage} key={item.type} />)}</div>
+      <div className="flow-phone"><div className="phone-frame"><div className="phone-island" /><div className="phone-status">10:09 AM <span>|||</span></div><AnimatePresence mode="wait"><motion.div className="phone-content" key={stage.type} initial={{ opacity: 0, scale: .94 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.04 }} transition={{ duration: .36 }}><div className="phone-art"><StageVisual type={stage.type} /></div><div className="phone-stage">{stage.label}</div><p>{stage.kicker}</p><h2>{stage.title}</h2><div className="phone-progress"><i /></div><small>[2-3 sec]</small></motion.div></AnimatePresence><div className="phone-dock"><div><span>Generation progress</span><b>{Math.round(((activeStage + 1) / 5) * 100)}%</b></div><div className="dock-progress"><i style={{ width: `${((activeStage + 1) / 5) * 100}%` }} /></div><em>Estimated time remaining: ~{(5 - activeStage) * 3} sec</em></div></div></div>
+      <div className="flow-side flow-side--right">{CLONE_STAGES.slice(3).map((item, offset) => <FlowCard item={item} index={offset + 3} activeStage={activeStage} key={item.type} />)}</div>
+    </section>
+    <nav className="flow-mobile-steps" aria-label="Generation progress">{CLONE_STAGES.map((item, index) => <button type="button" onClick={() => setActiveStage(index)} className={index === activeStage ? 'is-active' : index < activeStage ? 'is-done' : ''} key={item.type}>{index + 1}</button>)}</nav>
+  </main>;
+}
+
+function FlowCard({ item, index, activeStage }) {
+  const isActive = index === activeStage;
+  return <motion.article className={`flow-card ${isActive ? 'is-active' : ''} ${index < activeStage ? 'is-complete' : ''}`} animate={{ opacity: isActive ? 1 : .58, y: isActive ? -4 : 0 }} transition={{ duration: .3 }}><div className="flow-card-label">Stage {index + 1}</div><div className="flow-card-art"><StageVisual type={item.type} /><b>{index + 1}</b></div><p>{item.kicker}</p><h2>{item.title}</h2><div className="flow-card-progress"><i style={{ width: isActive || index < activeStage ? '100%' : '0%' }} /></div><small>[2-3 sec]</small></motion.article>;
+}
 
 const IconBot = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -77,12 +163,17 @@ function nowTime() {
 
 export default function App() {
   const [uid, setUid]               = useState(null);
+  const [firebaseUser, setFirebaseUser] = useState(null);
   const [livekitToken, setToken]    = useState(null);
   const [isConnected, setConnected] = useState(false);
+  const [introComplete, setIntroComplete] = useState(false);
 
   useEffect(() => {
     signInAnonymously(auth).catch(console.error);
-    const unsub = onAuthStateChanged(auth, u => setUid(u?.uid ?? null));
+    const unsub = onAuthStateChanged(auth, u => {
+      setFirebaseUser(u);
+      setUid(u?.uid ?? null);
+    });
     return unsub;
   }, []);
 
@@ -92,10 +183,13 @@ export default function App() {
   }, []);
 
   const fetchAndSetToken = useCallback(async () => {
-    if (!uid) return;
+    if (!uid || !firebaseUser) return false;
     try {
       const room = `room-${uid.substring(0, 8)}`;
-      const fbToken = await auth.currentUser?.getIdToken(true); // Force refresh Firebase token
+      const fbToken = await firebaseUser.getIdToken(true); // Force refresh Firebase token
+      if (!fbToken) {
+        throw new Error('Firebase ID token is missing');
+      }
       const { data } = await axios.get(`${API_URL}/token`, {
         params: { room, identity: uid },
         headers: {
@@ -105,11 +199,13 @@ export default function App() {
       });
       setToken(data.token);
       console.log("Token fetched/refreshed");
+      return true;
     } catch (e) {
-      console.error('Token fetch error:', e);
+      console.error('Token fetch error:', e.response?.data ?? e);
       handleDisconnect();
+      return false;
     }
-  }, [uid, handleDisconnect]);
+  }, [uid, firebaseUser, handleDisconnect]);
 
   useEffect(() => {
     if (!livekitToken) return;
@@ -128,9 +224,11 @@ export default function App() {
   }, [livekitToken, fetchAndSetToken]);
 
   const handleConnect = async () => {
-    await fetchAndSetToken();
-    setConnected(true);
+    const ok = await fetchAndSetToken();
+    setConnected(ok);
   };
+
+  if (!introComplete) return <CloneFlow onComplete={() => setIntroComplete(true)} />;
 
   if (isConnected && livekitToken) {
     return (

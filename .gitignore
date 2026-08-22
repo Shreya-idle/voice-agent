@@ -30,6 +30,7 @@ htmlcov/
 .idea/
 *.swp
 *.swo
+*.log
 
 pubspec.yaml
 pubspec.lock

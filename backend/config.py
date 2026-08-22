@@ -22,6 +22,13 @@ class Settings(BaseSettings):
 
     host: str = "0.0.0.0"
     port: int = 8000
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    audio_retention_hours: int = 24
+
+    @property
+    def allowed_cors_origins(self) -> list[str]:
+        """Return explicitly configured browser origins, never a credentialed wildcard."""
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
